@@ -30,6 +30,7 @@ if (substr($file, -4) === '.php') {
 $types = ['css' => 'text/css', 'js' => 'application/javascript', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
     'png' => 'image/png', 'webp' => 'image/webp', 'svg' => 'image/svg+xml', 'ico' => 'image/x-icon', 'txt' => 'text/plain'];
 header('Content-Type: ' . ($types[strtolower(pathinfo($file, PATHINFO_EXTENSION))] ?? 'application/octet-stream'));
+header_remove('X-Powered-By');   // Apache doesn't add it to plain files, so neither should we
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 readfile($file);

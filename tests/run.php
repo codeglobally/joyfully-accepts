@@ -169,7 +169,9 @@ foreach ($argv as $arg) {
     check('not-found page says 404 with a way back', $missing['status'] === 404 && strpos($missing['body'], 'Page not found') !== false && strpos($missing['body'], 'class="button" href="/"') !== false);
     $lost = $get('/no-such-page.txt');
     check('missing files get the 404 page with security headers', $lost['status'] === 404 && strpos($lost['body'], 'Page not found') !== false && stripos($lost['headers'], "content-security-policy: default-src 'self'") !== false);
-    check('plain files sent with nosniff', stripos($get('/assets/style.css')['headers'], 'x-content-type-options: nosniff') !== false);
+    $plain = $get('/assets/style.css')['headers'];
+    check('plain files sent with nosniff', stripos($plain, 'x-content-type-options: nosniff') !== false);
+    check('plain files don\'t reveal the PHP version', stripos($plain, 'x-powered-by') === false);
     check('not-found page has no admin link', strpos($missing['body'], '/admin.php') === false && strpos($home['body'], 'href="/admin.php"') !== false);
     check('unused HTTP methods refused', $get('/', null, [CURLOPT_CUSTOMREQUEST => 'DELETE'])['status'] === 405);
     check('PHP version not advertised', stripos($home['headers'], 'x-powered-by') === false);
