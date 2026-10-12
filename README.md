@@ -59,7 +59,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 
 ```bash
 cp private/config.example.php private/config.php
-php -S localhost:8080 -t public_html
+php -S localhost:8080 -t public_html tests/router.php
 ```
 
 Open http://localhost:8080. Edit `private/config.php` to set your names, date, venue and an admin password, then sign in at http://localhost:8080/admin.php with username `admin`.
@@ -193,6 +193,8 @@ docs/screenshots/       Images for this README
 .zap/rules.tsv          Which ZAP scan findings fail the build
 psalm.xml               Settings for the Psalm taint analysis
 SECURITY.md             OWASP review and how to report a vulnerability
+CONTRIBUTING.md         How to help, run it locally and send changes
+CODE_OF_CONDUCT.md      How we treat each other, and how to report problems
 deploy.sh               One-command deploy to cPanel hosting
 ```
 
@@ -203,7 +205,7 @@ deploy.sh               One-command deploy to cPanel hosting
 - **Have an idea?** [Suggest it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml).
 - **Found a security problem?** Please report it [privately](https://github.com/codeglobally/joyfully-accepts/security/advisories/new), never in a public issue. See [SECURITY.md](SECURITY.md).
 
-Pull requests are welcome. The aim is to keep it small: plain PHP, no dependencies or build step, working on PHP 7.4+ and shared hosting. Please run the tests first (see [Running the tests](#running-the-tests)).
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run it locally, the project's aims and the checklist. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Licence
 

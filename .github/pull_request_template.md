@@ -8,7 +8,9 @@
 
 ## Checklist
 
-- [ ] `php tests/run.php` passes, including the end-to-end checks (see README, Running the tests)
+See [CONTRIBUTING.md](https://github.com/codeglobally/joyfully-accepts/blob/main/CONTRIBUTING.md) for the details.
+
+- [ ] `php tests/run.php` passes, including the end-to-end checks
 - [ ] Still plain PHP with no new dependencies or build step, and still works on PHP 7.4
 - [ ] Anything a guest sees still works by keyboard and meets WCAG 2.1 AA
 - [ ] Any new output is escaped, and any new form has a CSRF token
