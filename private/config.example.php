@@ -53,6 +53,10 @@ const MAX_FAILED_ATTEMPTS = 10;
 // (e.g. 0.7) if the panel covers faces.
 // const PHOTO_PANEL_START = 0.8;
 
+// The home page shows only your names, so the date stays private to guests
+// who've entered their code. Set this to true to show the date there too.
+// const DATE_ON_HOME_PAGE = true;
+
 // Footer line "Made with ♥ in …" (hidden if empty), optionally a hidden link.
 // const MADE_IN = 'Ljubljana';
 // const MADE_IN_URL = 'https://en.wikipedia.org/wiki/Ljubljana';

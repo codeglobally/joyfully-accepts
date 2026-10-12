@@ -49,7 +49,7 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg' : 'centered');
 <main class="entry lightbox">
   <p class="eyebrow">You're invited</p>
   <h1><?= h(COUPLE_NAMES) ?></h1>
-  <p class="date"><?= h(WEDDING_DATE) ?></p>
+  <?php if (DATE_ON_HOME_PAGE): ?><p class="date"><?= h(WEDDING_DATE) ?></p><?php endif; ?>
 
   <form method="post" action="/" class="code-box" autocomplete="off">
     <?= csrf_field() ?>

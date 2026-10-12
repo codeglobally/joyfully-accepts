@@ -20,6 +20,9 @@ $defaults = [
     // On tablets and tall windows the invitation panel starts this far down
     // the photo (0.8 = 80%). Lower it if the panel covers faces.
     'PHOTO_PANEL_START' => 0.8,
+    // Show the wedding date on the home page, where anyone can see it. Off by
+    // default, so only guests who've entered their code see the date.
+    'DATE_ON_HOME_PAGE' => false,
     // Footer line "Made with ♥ in …". Leave empty to hide it. The optional
     // URL turns the place name into a hidden link.
     'MADE_IN' => '',

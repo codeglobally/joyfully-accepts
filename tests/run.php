@@ -163,6 +163,7 @@ foreach ($argv as $arg) {
 
     $home = $get('/');
     check('home page loads', $home['status'] === 200 && strpos($home['body'], 'Alex &amp; Sam') !== false);
+    check('date kept off the public home page', strpos($home['body'], WEDDING_DATE) === false);
     check('Content-Security-Policy sent', stripos($home['headers'], "content-security-policy: default-src 'self'") !== false);
     check('framing blocked', stripos($home['headers'], 'x-frame-options: deny') !== false);
     $missing = $get('/404.php');
@@ -197,6 +198,7 @@ foreach ($argv as $arg) {
     $right = $get('/', ['csrf' => $csrf($wrong['body']), 'code' => strtolower($code)]);
     check('right code signs in', $right['status'] === 302 && strpos($right['headers'], '/guest.php') !== false);
     $guestPage = $get('/guest.php');
+    check('guest page shows the date', strpos($guestPage['body'], WEDDING_DATE) !== false);
     check('guest page shows RSVP with a tick box per person', $guestPage['status'] === 200 && substr_count($guestPage['body'], 'name="coming[]"') === 2);
     $saved = $get('/guest.php', ['csrf' => $csrf($guestPage['body']), 'attending' => 'yes', 'coming' => ['0'], 'notify' => '1']);
     check('RSVP saved', $saved['status'] === 302 && strpos($saved['headers'], 'saved=1') !== false);

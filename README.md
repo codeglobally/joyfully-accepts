@@ -33,7 +33,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 ## Features
 
 **For guests**
-- Code entry page with your photo, names and date. The code fills in automatically from the invitation link.
+- Code entry page with your photo and names. The date stays hidden until a guest enters their code (or show it with `DATE_ON_HOME_PAGE`). The code fills in automatically from the invitation link.
 - RSVP: *Joyfully accepts / Regretfully declines / Not sure yet*, choosing **who's coming** per person ("Sarah & Tom Jones" gets a tick box each), or a number for "The Smith Family".
 - Dietary requirements per person, picked from a list or typed in, shown as removable chips.
 - Content sections you write (the day, where to stay, travel, FAQs…), collapsible, with each guest's open/closed choice remembered.
