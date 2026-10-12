@@ -13,7 +13,9 @@ public_html/assets/photos/*
 
 # Build output and local tooling
 *.zip
-.claude/
+# Claude Code: personal settings stay local; the shared preview config is kept
+.claude/*
+!.claude/launch.json
 .DS_Store
 *.swp
 *~
