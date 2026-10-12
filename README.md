@@ -1,0 +1,201 @@
+# Joyfully Accepts
+
+[![Version](https://img.shields.io/badge/version-2.2-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
+[![Tests](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml/badge.svg)](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml)
+[![Security](https://github.com/codeglobally/joyfully-accepts/actions/workflows/security.yml/badge.svg)](SECURITY.md)
+[![WCAG 2.1 AA](https://img.shields.io/badge/WCAG_2.1-AA-2e7d32)](#accessibility)
+[![PHP 7.4+](https://img.shields.io/badge/PHP-7.4%2B-777bb4?logo=php&logoColor=white)](https://www.php.net/)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+
+A small, self-hosted wedding website with private invitations and RSVPs. Each guest gets an 8-character code (or a link with it built in). Entering it opens their own invitation page, where they reply, choose dietary requirements and see the details you add. You run everything from a simple admin area.
+
+It's plain PHP with a SQLite database: no frameworks, no build step, no external services. It runs on almost any shared hosting (cPanel and similar), and on your own computer for testing.
+
+![Home page on desktop: the couple's photo with the invitation code panel](docs/screenshots/home-desktop.jpg)
+
+<details>
+<summary><strong>More screenshots</strong>: the invitation page, phones and the admin area</summary>
+
+<br>
+
+| Invitation page | Admin: guests |
+|---|---|
+| ![Invitation page on desktop: welcome, add to calendar and the RSVP](docs/screenshots/invitation-desktop.jpg) | <a href="docs/screenshots/admin-guests.png"><img src="docs/screenshots/admin-guests.png" alt="Admin guests tab: totals, dietary donut and the invitations table"></a> |
+
+| Home on a phone | Invitation on a phone | Admin: insights |
+|---|---|---|
+| <img src="docs/screenshots/home-phone.jpg" alt="Home page on a phone" width="180"> | <img src="docs/screenshots/invitation-phone.jpg" alt="Invitation page on a phone, with RSVP, who's coming, dietary requirements and sections" width="180"> | <a href="docs/screenshots/admin-insights.png"><img src="docs/screenshots/admin-insights.png" alt="Admin insights tab: reply funnel, who to nudge, headcount and dietary list" width="400"></a> |
+
+</details>
+
+*Shown with made-up names, date, venue and guests. Out of the box the site uses a built-in sample photo until you add your own.*
+
+## Features
+
+**For guests**
+- Code entry page with your photo, names and date. The code fills in automatically from the invitation link.
+- RSVP: *Joyfully accepts / Regretfully declines / Not sure yet*, choosing **who's coming** per person ("Sarah & Tom Jones" gets a tick box each), or a number for "The Smith Family".
+- Dietary requirements per person, picked from a list or typed in, shown as removable chips.
+- Content sections you write (the day, where to stay, travel, FAQs…), collapsible, with each guest's open/closed choice remembered.
+- **Add to calendar** (Apple/Outlook file with reminders, Google Calendar, Outlook.com).
+- Opt in or out of update emails, and a feedback box.
+- Works well on phones, tablets and desktops.
+
+**For you (admin)**
+- **Guests:** add invitations in bulk (`Name; email` per line), edit, delete, copy links, and download a CSV. Summary counts, plus a dietary requirements donut chart.
+- **Insights:** RSVP funnel (invited → emailed → visited → replied), who to nudge, headcount range, caterer-ready dietary list with allergies flagged (CSV), and replies over time.
+- **Invitation email:** styled HTML email with your photo, preview, test send, and send to everyone not yet emailed.
+- **Updates:** email news to everyone or a group (coming, not replied…), with templates, one-click unsubscribe and a history.
+- **Content:** add, edit, reorder, show or hide guest-page sections with simple formatting (bold, italic, headings, lists, links, text sizes) and preview.
+- **Feedback** inbox, and **People**: extra admin logins (e.g. your partner) via emailed setup links, with forgot-password.
+
+## Requirements
+
+- PHP 7.4 or newer with PDO SQLite (standard on most hosts). GD is optional: it lets the site sample colours from your photo.
+- Apache or LiteSpeed (for the included `.htaccess` rules). On nginx, keep `private/` outside the web root (recommended anyway).
+- HTTPS (free Let's Encrypt certificates come with most hosting).
+
+## Quick start (on your computer)
+
+```bash
+cp private/config.example.php private/config.php
+php -S localhost:8080 -t public_html
+```
+
+Open http://localhost:8080. Edit `private/config.php` to set your names, date, venue and an admin password, then sign in at http://localhost:8080/admin.php with username `admin`.
+
+When running locally, emails aren't sent. They're written to `private/data/mail.log` instead. PHP caches files briefly, so wait a couple of seconds after editing before reloading.
+
+## Making it yours
+
+All settings live in `private/config.php`. See `private/config.example.php` for every option, with examples.
+
+- **Names, date, venue, site address and admin password:** the first few settings.
+- **Photo:** put your photo in `public_html/assets/photos/` and set `PHOTO`. The layout adapts to any photo's shape, and the soft colour wash that continues past the photo is sampled from its edges automatically. Without a photo of your own, a sample landscape is used. Set `PHOTO` to `''` for a plain page. Optionally set `PHOTO_EMAIL` to a smaller copy for emails.
+- **Caption over the photo** (e.g. where it was taken): `PHOTO_CAPTION`. Each part can be plain text or a hidden link.
+- **Easter eggs:** `PHOTO_HOTSPOTS` puts invisible links over parts of the photo (e.g. the place you got engaged). They're positioned as fractions of the photo, so they line up at every screen size, and are left out where that part of the photo is cropped (e.g. on phones).
+- **Footer:** `MADE_IN` adds "Made with ♥ in …" (optionally a hidden link). The footer also credits the project ("© global.ly", linking here).
+- **Dietary options:** the list guests pick from is `DIETARY_OPTIONS` in `private/lib.php`.
+- **Colours:** CSS variables at the top of `public_html/assets/style.css`.
+
+Look-and-feel settings can also go in a separate `private/site.php`, which `deploy.sh` uploads (unlike `config.php`), so you can tweak them without touching the server by hand.
+
+## Putting it online
+
+1. **Upload** (FTP, SFTP or your host's file manager), including hidden `.htaccess` files:
+   - the **contents** of `public_html/` into your web root (often `public_html` or `www`)
+   - the `private/` folder **next to** the web root, not inside it. If your host only gives you the web root, put it inside; the pages find it either way and `.htaccess` blocks it.
+2. Create `private/config.php` on the server (copy the example and fill it in). Make sure `private/data/` is writable by the web server.
+3. Turn on HTTPS, then visit `/admin.php` and sign in as `admin`.
+4. Check that `https://yourdomain/config.php` and `https://yourdomain/private/config.php` show "Forbidden" or "Not Found".
+
+### One-command updates (cPanel)
+
+`deploy.sh` uploads a new version through the cPanel API. It never uploads `private/config.php` or your database, and it backs up the live site first (to `~/wedding-backups/` on the server, including config and database; to roll back, extract a backup in File Manager).
+
+1. In cPanel, open **Security → Manage API Tokens** and create a token (give it an expiry date).
+2. Run `./deploy.sh --setup` and enter your domain, cPanel username (the account name, not an email address) and the token. They're stored in `~/.config/wedding-deploy/`, readable only by you. The token is passed to curl via a temporary file, never on the command line.
+3. Run `./deploy.sh --check` to test the connection, then `./deploy.sh` to deploy.
+
+Bump `SITE_VERSION` in `private/lib.php` (and the version badge at the top of this README) for each release. It's shown in the footer, refreshes browser caches, and lets the script confirm the new version is live. A cPanel token can do anything in your hosting account, so revoke it when you're done.
+
+## Sending emails that don't land in spam
+
+Emails go out through your host's mail system:
+- Set the **From address** (admin → Invitation email) to a real mailbox on your domain.
+- Make sure your domain has **SPF**, **DKIM** and **DMARC** DNS records. A simple DMARC record is a TXT record named `_dmarc` with `v=DMARC1; p=none;`.
+- If your domain uses your registrar's nameservers rather than your host's, add DNS records at the registrar. Records added in your host's DNS editor won't be seen.
+- Send yourself a test first and mark it "Not junk" if needed. Most shared hosts limit sending to a few hundred emails an hour.
+
+## Admin guide
+
+- **Adding guests:** one invitation per line, as `Name; email` (email optional). One line per household (`Sarah, Tom and Lily Jones; sarah@example.com`). The name decides the RSVP's tick boxes: separate people with `&`, `,` or `and`, add a plus-one with `+ guest`, and use "Family" for an unknown number. The edit form shows how a name is being split.
+- **Logins:** the owner signs in as `admin` with `ADMIN_PASSWORD`, which can't be reset by email, so there's always a way in. Add others on the **People** tab: they get an emailed (or copied) one-time setup link, valid 7 days, and choose their own password. They can use every tab except People, and **Forgot password?** emails them a reset link.
+- **Content formatting:** blank line = new paragraph, `## ` = subheading, `- ` = bullet, `**bold**`, `*italic*`, `[text](https://…)` = link, and `[large]…[/large]` (also `small` and `xlarge`) = text size. The toolbar adds these for you.
+- **Email placeholders:** `{name}`, `{link}` and `{code}` are filled in for each guest. In emails, the link appears as a button.
+
+## Security
+
+- **Codes:** 31 characters × 8 positions (about 850 billion combinations). Each connection gets 10 wrong guesses per 15 minutes (IPv6 counted per /64), shared with admin sign-ins.
+- **Sessions:** a new session ID at sign-in. Cookies are HttpOnly, SameSite=Lax and Secure over HTTPS. Admin sessions end after 2 hours idle.
+- **Forms:** CSRF tokens everywhere, input read as plain text, and prepared SQL statements.
+- **Output:** HTML-escaped everywhere, a strict Content Security Policy (only the site's own scripts and styles), no framing, HSTS, Permissions-Policy and cross-origin isolation headers, and spreadsheet-formula-safe CSV exports.
+- **Passwords:** at least 12 characters, and extra admins' passwords are bcrypt-hashed. Setup and reset links are stored only as hashes and are single-use.
+- **Files:** config, code and the database live outside the web root, with `.htaccess` blocking them if they ever end up inside it. Errors go to the server log, never the page. Pages carry `noindex`.
+- **Privacy:** no third-party analytics, fonts or trackers. Visits and insights stay in your own database.
+
+**Known limits:** anyone with a guest's link can RSVP as that guest (the trade-off for one-click links). `ADMIN_PASSWORD` is stored as plain text in `private/config.php`, so keep that file private and the password unique. Don't put anything truly sensitive on the guest pages.
+
+### Security checks
+
+[SECURITY.md](SECURITY.md) maps the site against the OWASP Top 10 and ASVS level 1, and explains how to report a vulnerability privately. On every push, GitHub Actions runs:
+- **Psalm taint analysis**: traces request data to HTML, SQL, headers, files and shell commands, and fails on anything unescaped.
+- **OWASP ZAP baseline scan**: crawls a test copy and checks headers, cookies, CSRF tokens and information leaks.
+
+The reference install scores **A+** on both [Mozilla Observatory](https://developer.mozilla.org/en-US/observatory) (headers) and [SSL Labs](https://www.ssllabs.com/ssltest/) (TLS). It's worth testing your own site too, since TLS depends on your host. To run the taint analysis yourself (needs [Psalm](https://psalm.dev) 6):
+
+```bash
+psalm --taint-analysis
+```
+
+## Accessibility
+
+The guest pages and the whole admin area were audited against **WCAG 2.1 level AA** with [axe-core](https://github.com/dequelabs/axe-core) 4.10 (the engine behind most accessibility checkers), on 13 pages and states at desktop and phone sizes, with **no issues found**. Alongside that:
+- Text and control colours meet AA contrast (4.5:1 for text). The photo caption has its own backing so it stays readable over any photo.
+- Everything works by keyboard, with visible focus, including the dietary picker and collapsible sections.
+- Form fields have labels, images and icon buttons have text alternatives, and charts come with a table version.
+- Respects "reduce motion" and "reduce transparency" settings, and works without JavaScript (the dietary picker falls back to a plain list).
+
+Automated tools can't catch everything, so if you hit a barrier, please open an issue.
+
+## Running the tests
+
+```bash
+php tests/run.php
+```
+
+That runs the unit tests (name parsing, codes, safe formatting, CSV safety, dietary handling, calendar files, logins). To include end-to-end checks against a running copy of the site (sign-in with a code, RSVP, security headers, admin protection):
+
+```bash
+WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php -S localhost:8097 -t public_html &
+WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php tests/run.php --http=http://localhost:8097
+```
+
+GitHub Actions runs both on PHP 7.4, 8.1, 8.3 and 8.4 for every push and pull request.
+
+## Project layout
+
+```
+public_html/            Everything a browser can reach
+  index.php             Code entry (home page)
+  guest.php             A guest's invitation page and RSVP
+  admin.php             Admin area (all tabs)
+  calendar.php          "Add to calendar" file
+  unsubscribe.php       Stop / restart update emails
+  404.php               "Page not found", in the site's style
+  theme.css.php         Styles worked out from your photo and settings
+  assets/               Stylesheet, scripts, sample photo; photos/ for yours
+private/                Never served to browsers
+  config.example.php    Copy to config.php
+  defaults.php          Defaults for optional settings
+  lib.php               Shared code
+  mailer.php            Invitation emails
+  notify.php            Update emails
+  content.php           Guest-page sections
+  users.php             Admin logins
+  insights.php          Insights tab
+  calendar.php          Calendar file and links
+  photo.php             Photo shape and edge colours
+  data/                 SQLite database (created automatically)
+tests/                  Automated tests (run.php) and their settings
+docs/screenshots/       Images for this README
+.github/workflows/      Tests and security scans on GitHub
+.zap/rules.tsv          Which ZAP scan findings fail the build
+psalm.xml               Settings for the Psalm taint analysis
+SECURITY.md             OWASP review and how to report a vulnerability
+deploy.sh               One-command deploy to cPanel hosting
+```
+
+## Licence
+
+MIT. See [LICENSE](LICENSE). The sample photo is generated by the project and free to use.

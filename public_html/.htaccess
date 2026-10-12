@@ -1,0 +1,53 @@
+RewriteEngine On
+
+# Send www.yourdomain to yourdomain, so everyone uses one address
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
+# Force HTTPS
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Private files normally live outside public_html. These rules are a second
+# line of defence, and cover hosts where private/ has to sit in here.
+<FilesMatch "(?i)^(config|lib)\.php$|^\.ht|\.(sqlite|sqlite-journal|bak|swp|log)$|~$">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 (?i)^/(private|sections|data)(/|$)
+
+# PHP pages send their own security headers (private/lib.php). Give the
+# plain files (styles, scripts, images) the basic ones too. Images stay
+# loadable from elsewhere, because emails show the photo from this site.
+<IfModule mod_headers.c>
+  <FilesMatch "(?i)\.(css|js|jpe?g|png|gif|webp|svg|ico|ics|txt)$">
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "no-referrer"
+  </FilesMatch>
+</IfModule>
+
+# Speed. Pages link to styles, scripts and the photo with their last-changed
+# time in the address (?v=…), so browsers can keep them for a year and still
+# get a new copy the moment one changes. Images are kept for a month.
+<IfModule mod_headers.c>
+  <FilesMatch "(?i)\.(css|js|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "(?i)\.(jpe?g|png|gif|webp|svg|ico)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+</IfModule>
+
+# Compress styles, scripts and other text. HTML pages are left uncompressed
+# on purpose: they hold security tokens next to text from the request, and
+# compressing those together can leak the tokens (the "BREACH" attack). The
+# pages are small, so this costs little.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/css application/javascript text/javascript image/svg+xml text/plain
+</IfModule>
+
+DirectoryIndex index.php
+# Missing and blocked pages both get the friendly "Page not found" page
+# (as a 404), so it never gives away that a private file exists.
+ErrorDocument 404 /404.php
+ErrorDocument 403 /404.php
+Options -Indexes

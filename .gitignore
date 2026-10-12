@@ -1,0 +1,19 @@
+# Your settings and secrets (see private/config.example.php)
+private/config.php
+private/site.php
+private/*.aside
+
+# The guest database, mail log and anything else the site writes
+private/data/*
+!private/data/.gitkeep
+
+# Your own photos
+public_html/assets/photos/*
+!public_html/assets/photos/.gitkeep
+
+# Build output and local tooling
+*.zip
+.claude/
+.DS_Store
+*.swp
+*~

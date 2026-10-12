@@ -1,0 +1,65 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'   # weekly, to pick up new scanner rules
+
+permissions:
+  contents: read
+
+jobs:
+  taint:
+    name: Psalm taint analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, gd, curl, mbstring
+          tools: psalm:6.20.0
+          coverage: none
+
+      # Traces data from requests, cookies and the database to HTML output,
+      # SQL, headers, files and shell commands. Fails on anything that gets
+      # there without being escaped or validated.
+      - name: Look for injection paths (XSS, SQL, header, file, shell)
+        run: psalm --taint-analysis --no-cache --no-progress --output-format=github
+
+  zap:
+    name: OWASP ZAP baseline scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, gd, curl, mbstring
+          coverage: none
+
+      - name: Start a test copy of the site
+        env:
+          WEDDING_CONFIG: ${{ github.workspace }}/tests/config.php
+          WEDDING_TEST_DB: ${{ runner.temp }}/zap.sqlite
+        run: |
+          php -S 0.0.0.0:8097 -t public_html > "$RUNNER_TEMP/server.log" 2>&1 &
+          sleep 1
+          curl -sf http://localhost:8097/ > /dev/null
+
+      # Crawls the site and checks every response passively (headers,
+      # cookies, forms, information leaks). It doesn't attack anything.
+      # Rules marked FAIL in .zap/rules.tsv fail the build; others are
+      # reported as warnings in the job summary and the uploaded report.
+      - name: Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://localhost:8097
+          rules_file_name: .zap/rules.tsv
+          cmd_options: '-I'
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-report

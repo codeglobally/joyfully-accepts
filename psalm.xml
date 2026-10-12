@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="4"
+    resolveFromConfigFile="true"
+    findUnusedCode="false"
+    findUnusedBaselineEntry="false"
+    allFunctionsGlobal="true"
+    allConstantsGlobal="true"
+    xmlns="https://getpsalm.org/schema/config"
+>
+    <!-- Static analysis. Run psalm with its taint-analysis option for the
+         security check (see README, Security checks).
+         It traces data from requests, cookies and the database to places
+         where it could do harm (HTML output, SQL, headers, files, shell) and
+         fails if anything gets there without being escaped or validated. -->
+    <projectFiles>
+        <directory name="private" />
+        <directory name="public_html" />
+        <ignoreFiles>
+            <!-- Your real settings (not in git); the example stands in for them. -->
+            <file name="private/config.php" />
+            <file name="private/site.php" />
+            <directory name="private/data" />
+        </ignoreFiles>
+    </projectFiles>
+    <!-- There's no composer.json to say so, so tell psalm the site uses PDO.
+         This loads the rules that treat database queries as places where
+         unchecked data could do harm (SQL injection). -->
+    <enableExtensions>
+        <extension name="pdo" />
+    </enableExtensions>
+</psalm>

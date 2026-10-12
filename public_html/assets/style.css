@@ -1,0 +1,830 @@
+:root {
+  --bg: #fff7f1;
+  --card: #ffffff;
+  --ink: #2a211c;
+  --muted: #8a6552;
+  --line: #f3dccb;
+  --accent: #c2410c;
+  --accent-ink: #ffffff;
+  --error: #a33a2c;
+  --ok-bg: #eef4ea;
+  --ok-ink: #3f5f33;
+  --font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* Admin pages use neutral greys instead of the guest pages' orange. */
+body.admin {
+  --bg: #f4f4f5;
+  --ink: #18181b;
+  --muted: #6b6b73;
+  --line: #e4e4e7;
+  --accent: #52525b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+body.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+h1, h2 { font-weight: 300; letter-spacing: -0.02em; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); }
+h2 { font-size: 1.5rem; font-weight: 400; margin-bottom: 12px; }
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.date { margin: 8px 0 0; color: var(--muted); font-size: 1.05rem; }
+
+/* --- Code entry page --- */
+
+.entry { width: 100%; max-width: 440px; text-align: center; }
+/* Long couple names wrap onto two even lines rather than three. */
+.entry h1 { font-size: clamp(1.9rem, 5.5vw, 2.6rem); text-wrap: balance; }
+
+.code-box {
+  margin-top: 40px;
+  padding: 32px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.code-box label { color: var(--muted); font-size: 0.95rem; }
+.code-box input {
+  width: 100%;
+  padding: 16px;
+  font: 500 1.6rem/1 var(--font);
+  letter-spacing: 0.25em;
+  text-align: center;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.code-box input[type="password"] { letter-spacing: normal; text-transform: none; font-size: 1.1rem; }
+.code-box input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.code-box input::placeholder { color: #ebc4a8; }
+
+/* --- Buttons & forms --- */
+
+button, a.button {
+  font: 500 1rem var(--font);
+  padding: 14px 24px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+button:hover, a.button:hover { filter: brightness(1.08); }
+button:focus-visible, a.button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.link {
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.link:hover { text-decoration: underline; filter: none; }
+.link.small { font-size: 0.8rem; margin-left: 8px; }
+.link.danger { color: var(--error); }
+
+.error { color: var(--error); margin: 0; font-size: 0.95rem; }
+.notice { background: var(--ok-bg); color: var(--ok-ink); padding: 12px 16px; border-radius: 8px; margin: 0 0 16px; }
+
+textarea {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0 12px;
+  font: 0.95rem/1.5 var(--font);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+fieldset { border: 0; padding: 0; margin: 0 0 20px; }
+legend { margin-bottom: 12px; }
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.choice:has(input:checked) { border-color: var(--accent); background: var(--bg); }
+.choice input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+
+/* --- Guest page --- */
+
+/* Dietary boxes only show once "Joyfully accepts" is picked
+   (browsers without :has() simply always show them). */
+.rsvp-form:not(:has(input[value="yes"]:checked)) .dietary,
+.rsvp-form:not(:has(input[value="yes"]:checked)) .coming { display: none; }
+.coming .choice input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.party-size {
+  padding: 10px 12px;
+  font: 1rem var(--font);
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.diet-row[hidden] { display: none; }
+.dietary .hint { margin: -4px 0 12px; }
+.diet-row { margin-bottom: 14px; }
+.diet-row > label { display: block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 500; }
+/* Fallback when JavaScript is off: a plain multi-select list. */
+.diet-row select { width: 100%; padding: 6px; font: 1rem var(--font); border: 1px solid var(--line); border-radius: 8px; }
+
+/* Chip picker (assets/guest.js) */
+.chips-wrap { position: relative; }
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: text;
+}
+.chips:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chip {
+  --chip-bg: #e0efff;
+  --chip-ink: #1e3a8a;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 3px 3px 10px;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--chip-ink);
+  background: var(--chip-bg);
+  border: 1.5px solid var(--chip-ink);
+  border-radius: 999px;
+}
+.chips .chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--chip-ink);
+  background: none;
+  border-radius: 999px;
+}
+.chips .chip-x:hover { background: #c4dcfb; filter: none; }
+.chips .chip-x:focus-visible { outline: 2px solid var(--chip-ink); outline-offset: 0; }
+.chips-input {
+  flex: 1 1 120px;
+  min-width: 120px;
+  padding: 6px 4px;
+  font: 1rem var(--font);
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+.chips-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 232px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(40, 20, 10, 0.15);
+}
+.chips-list li { padding: 9px 10px; border-radius: 6px; cursor: pointer; }
+.chips-list li:hover, .chips-list li.active { background: var(--bg); }
+.chips-list li.add { color: var(--accent); }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.top.wide { max-width: 1440px; }
+.top form { margin: 0; }
+.brand { font-size: 1rem; font-weight: 500; letter-spacing: 0.02em; }
+
+.content { max-width: 720px; margin: 0 auto; padding: 0 16px 64px; }
+.content.wide { max-width: 1440px; }
+
+.hero { text-align: center; padding: 40px 0 32px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.card p:last-child { margin-bottom: 0; }
+
+.list { list-style: none; padding: 0; margin: 0; }
+.list li { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; border-top: 1px solid var(--line); }
+.list li:first-child { border-top: 0; padding-top: 0; }
+.list span { color: var(--muted); }
+.list a { color: var(--accent); }
+
+/* --- Admin --- */
+
+.email-form label { display: block; margin-bottom: 12px; font-size: 0.9rem; color: var(--muted); }
+.email-form input[type="text"],
+.email-form input[type="email"] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  font: 0.95rem var(--font);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.email-form textarea { margin-top: 6px; color: var(--ink); }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
+.hint { margin: -4px 0 16px; font-size: 0.85rem; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button.secondary { background: none; color: var(--accent); border: 1px solid var(--accent); }
+button:disabled { opacity: 0.45; cursor: default; filter: none; }
+form.inline { display: inline; }
+tr.editing td { background: var(--bg); }
+.edit-guest { margin: 4px 0 16px; padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.edit-guest label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); flex: 1 1 200px; }
+.edit-guest input {
+  padding: 8px 10px;
+  font: 0.95rem var(--font);
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.edit-guest button { padding: 9px 18px; }
+.edit-guest .link { padding: 9px 4px; }
+.edit-title { flex: 1 1 100%; margin: 0; }
+.edit-title .hint { margin: 0; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.stats div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; text-align: center; }
+.stats strong { display: block; font-size: 2rem; font-weight: 300; }
+.stats span { color: var(--muted); font-size: 0.85rem; }
+.stats small { display: block; color: var(--muted); font-size: 0.75rem; }
+td.dietary-cell { white-space: normal; min-width: 130px; max-width: 280px; }
+/* Let long names and email addresses wrap rather than widen the table. */
+td.name-cell { white-space: normal; min-width: 110px; max-width: 220px; }
+td.email-cell { white-space: normal; overflow-wrap: anywhere; min-width: 150px; max-width: 260px; }
+.edit-people { flex: 1 1 100%; margin: 0; }
+
+.row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { text-align: left; padding: 10px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; border-top: 0; }
+td form { margin: 0; }
+code { font-size: 0.95rem; letter-spacing: 0.08em; }
+
+.pill { font-size: 0.8rem; padding: 2px 10px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+.pill.yes { background: var(--ok-bg); color: var(--ok-ink); }
+.pill.no { background: #f6e9e6; color: var(--error); }
+
+@media (max-width: 480px) {
+  .code-box { padding: 24px 16px; }
+  .code-box input { font-size: 1.3rem; letter-spacing: 0.18em; }
+  .card { padding: 20px 16px; }
+}
+
+.card a { color: var(--accent); }
+
+/* --- Couple photo across the top of the entry and guest pages --- */
+
+/* The photo fills the top of the page and fades into the background,
+   so the panel below can overlap it without covering faces. */
+/* Height matches the photo's shape (width / --photo-ratio), so the whole
+   picture shows and the panel can start just below our chins (~80% down). */
+body.photo-bg {
+  --photo-h: calc(100vw / var(--photo-ratio, 1.5));
+  --panel-top: calc(var(--photo-h) * var(--photo-panel-start, 0.8));
+  position: relative;
+  display: flow-root;
+}
+body.photo-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--photo-h);
+  z-index: -1;
+  background: var(--photo-url) center 30% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, rgba(0,0,0,0.9) 68%, rgba(0,0,0,0.7) 76%,
+    rgba(0,0,0,0.45) 84%, rgba(0,0,0,0.2) 92%, rgba(0,0,0,0.06) 97%, transparent);
+  mask-image: linear-gradient(to bottom, #000 60%, rgba(0,0,0,0.9) 68%, rgba(0,0,0,0.7) 76%,
+    rgba(0,0,0,0.45) 84%, rgba(0,0,0,0.2) 92%, rgba(0,0,0,0.06) 97%, transparent);
+}
+
+.lightbox {
+  background: rgba(255, 247, 241, 0.88);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(40, 20, 10, 0.25);
+}
+
+/* Entry page: names, date and code form share one panel. */
+.entry.lightbox {
+  margin: var(--panel-top) auto 32px;
+  padding: 36px 32px;
+}
+.entry.lightbox .code-box {
+  margin-top: 28px;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+/* Guest page: header and cards sit inside a panel over the photo. */
+.lightbox.page { max-width: 760px; margin: var(--panel-top) auto 32px; padding: 8px 20px 4px; }
+.lightbox.page .top { padding: 16px 0; }
+.lightbox.page .content { padding: 0 0 16px; }
+.lightbox.page .hero { padding: 16px 0 28px; }
+
+@media (max-width: 480px) {
+  body.photo-bg { --photo-h: 52vh; --panel-top: calc(52vh - 70px); }
+  .entry.lightbox { width: auto; margin-left: 16px; margin-right: 16px; padding: 28px 20px; }
+  .lightbox.page { margin-left: 16px; margin-right: 16px; padding: 4px 12px 0; border-radius: 14px; }
+}
+
+/* Wide screens: the photo fills the height on the left and the panel sits
+   on the right over the water, so it never covers faces. */
+@media (min-width: 1000px) and (min-aspect-ratio: 5/4) {
+  body.photo-bg::before {
+    position: fixed;
+    bottom: 0;
+    right: auto;
+    height: auto;
+    width: calc(100vh * var(--photo-ratio, 1.5));
+    background-position: center;
+    /* A long, eased fade (no visible band where it starts). */
+    -webkit-mask-image: linear-gradient(to right, #000 62%, rgba(0,0,0,0.92) 70%, rgba(0,0,0,0.75) 78%,
+      rgba(0,0,0,0.5) 86%, rgba(0,0,0,0.25) 93%, rgba(0,0,0,0.08) 98%, transparent);
+    mask-image: linear-gradient(to right, #000 62%, rgba(0,0,0,0.92) 70%, rgba(0,0,0,0.75) 78%,
+      rgba(0,0,0,0.5) 86%, rgba(0,0,0,0.25) 93%, rgba(0,0,0,0.08) 98%, transparent);
+  }
+  .entry.lightbox,
+  .lightbox.page {
+    width: clamp(320px, 31vw, 420px);
+    max-width: none;
+    margin: 32px 24px 32px auto;
+  }
+  .entry.lightbox { margin-top: max(32px, calc(50vh - 230px)); }
+  .entry.lightbox h1 { font-size: clamp(1.7rem, 2.4vw, 2.2rem); }
+  .lightbox.page { padding: 4px 16px 0; }
+}
+
+/* Admin link and version number at the bottom of the lightbox */
+.site-footer { margin: 20px 0 0; font-size: 0.75rem; color: var(--muted); text-align: center; }
+.site-footer a { color: inherit; text-decoration: none; }
+.site-footer a:hover { color: var(--accent); text-decoration: underline; }
+.lightbox.page .site-footer { margin: 0 0 16px; }
+.brand .version { font-size: 0.75rem; font-weight: 400; color: var(--muted); }
+.top-links { display: flex; align-items: center; gap: 20px; }
+
+/* Guest page on phones and tablets: open with the RSVP panel in view. The
+   photo becomes a fixed background around it (guests have just seen it on
+   the entry page). Wide screens keep the photo-beside-panel layout above. */
+@media not all and (min-width: 1000px) and (min-aspect-ratio: 5/4) {
+  body.guest-page { --panel-top: 16px; }
+  body.guest-page::before {
+    position: fixed;
+    bottom: 0;
+    height: auto;
+    background-position: center 35%;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/* --- Admin tabs --- */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 20px; border-bottom: 1px solid var(--line); }
+.tabs a {
+  padding: 10px 16px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); font-weight: 500; border-bottom-color: var(--accent); }
+.signed-in { font-size: 0.85rem; color: var(--muted); }
+@media (max-width: 600px) { .signed-in { display: none; } }
+
+/* --- Content editor --- */
+.md-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+.md-toolbar button {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.md-toolbar button:hover { background: var(--bg); filter: none; }
+.section-form textarea { font-family: ui-monospace, Menlo, monospace; font-size: 0.9rem; }
+label.check { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+.section-preview { margin-bottom: 20px; }
+.section-preview .card { margin: 6px 0 0; }
+.row-actions { white-space: nowrap; }
+.row-actions .inline { margin-left: 4px; }
+button.link:disabled { opacity: 0.3; }
+.add-section { margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip-link {
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.chip-link:hover { background: var(--bg); }
+.link-box { display: block; padding: 10px 12px; margin-bottom: 10px; background: var(--bg); border-radius: 8px; word-break: break-all; }
+
+/* --- Formatted section text (guest page and preview) --- */
+.rich h3 { margin: 20px 0 4px; font-size: 1.1rem; font-weight: 500; }
+.rich h2 + h3 { margin-top: 4px; }
+.rich ul { margin: 0 0 16px; padding-left: 20px; }
+.rich li { margin-bottom: 4px; }
+.rich p { margin: 0 0 14px; }
+
+/* Admin sign-in and setup fields are normal text, not invite-code style. */
+body.admin .code-box input { letter-spacing: normal; text-transform: none; font-size: 1.05rem; padding: 12px 14px; text-align: left; }
+body.admin .code-box label { text-align: left; }
+body.admin .code-box p { margin: 0; text-align: left; }
+body.admin .code-box .forgot { margin: -4px 0 0; text-align: center; font-size: 0.85rem; }
+body.admin .code-box .forgot a, body.admin .code-box .hint code { color: var(--muted); }
+.pill.maybe { background: #fef3c7; color: #92400e; }
+td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted); white-space: normal; max-width: 200px; }
+.stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.updates .choice input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.updates .hint { margin: -2px 0 0; font-size: 0.85rem; color: var(--muted); }
+.chip-link.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.save-template { margin-top: 16px; }
+.save-template summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+.save-template .actions { margin-top: 10px; align-items: center; }
+.save-template input[type="text"] { width: auto; flex: 1 1 200px; margin: 0; }
+.email-form select.party-size { display: block; margin-top: 6px; }
+
+/* Text sizes in content sections ([small], [large], [xlarge]) */
+.rich .text-small { font-size: 0.85em; }
+.rich .text-large { font-size: 1.25em; }
+.rich .text-xlarge { font-size: 1.6em; line-height: 1.25; font-weight: 300; }
+.md-toolbar select { padding: 5px 8px; font: 0.85rem var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+
+/* Photo caption (e.g. where it was taken), over its top-right corner. */
+.photo-caption {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #fff;
+  /* A soft frosted backing keeps white text readable (WCAG AA, 4.5:1) over
+     any photo, even a pale sky. */
+  padding: 4px 12px;
+  background: rgba(20, 24, 30, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  border-radius: 999px;
+  text-shadow: none;
+  pointer-events: none;
+}
+/* Wide screens: the photo only covers the left part of the page (and fades
+   out on its right), so sit the caption inside the clear part of it. */
+@media (min-width: 1000px) and (min-aspect-ratio: 5/4) {
+  .photo-caption {
+    position: fixed;
+    right: auto;
+    left: calc(100vh * var(--photo-ratio, 1.5) * 0.76);
+    top: 18px;
+    transform: translateX(-100%);
+    font-size: 1.5rem;
+  }
+}
+
+/* Collapsible cards on the guest page */
+.card-heading { margin: 0; }
+.card-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.card-toggle:hover { filter: none; }
+.card-toggle:hover .chevrons { color: var(--accent); }
+.card-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.chevrons { flex: none; color: var(--muted); transition: transform 0.2s ease, color 0.2s; }
+.is-collapsed .chevrons { transform: rotate(180deg); }
+.card-body { margin-top: 12px; }
+.card.is-collapsed { padding-bottom: 20px; }
+@media (prefers-reduced-motion: reduce) { .chevrons { transition: none; } }
+
+/* Dietary donut on the admin Guests tab */
+.diet-chart { display: flex; flex-wrap: wrap; align-items: center; gap: 24px 40px; }
+.donut { flex: none; }
+.donut .seg { transition: opacity 0.15s; cursor: default; }
+.donut-number { font: 300 34px var(--font); fill: var(--ink); }
+.donut-caption { font: 12px var(--font); fill: var(--muted); }
+.diet-legend { width: auto; flex: 1 1 280px; max-width: 460px; font-size: 0.9rem; }
+.diet-legend td:nth-child(n+2), .diet-legend th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+.diet-legend tr { transition: opacity 0.15s; }
+.diet-chart .dim { opacity: 0.35; }
+.diet-legend tr.hl td { font-weight: 500; }
+.swatch { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border-radius: 3px; vertical-align: -1px; }
+.swatch-0 { background: #2a78d6; } .swatch-1 { background: #eb6834; } .swatch-2 { background: #1baf7a; }
+.swatch-3 { background: #eda100; } .swatch-4 { background: #e87ba4; } .swatch-other { background: #a8a6a0; }
+.diet-summary .hint { margin: 16px 0 0; }
+@media (prefers-reduced-motion: reduce) { .donut .seg, .diet-legend tr { transition: none; } }
+
+/* Guest feedback box */
+.feedback-box { margin: 4px 0 20px; text-align: center; }
+.feedback-box details { text-align: left; }
+.feedback-button {
+  display: inline-block;
+  padding: 10px 20px;
+  font-size: 0.95rem;
+  color: var(--accent);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+  list-style: none;
+}
+.feedback-button::-webkit-details-marker { display: none; }
+.feedback-box details[open] .feedback-button { margin-bottom: 12px; }
+.feedback-box details { text-align: center; }
+.feedback-form { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.feedback-form label { display: block; font-size: 0.9rem; color: var(--muted); }
+.feedback-form textarea { background: var(--card); }
+.feedback-box .notice { margin-top: 12px; }
+
+/* Admin feedback list */
+.feedback-item { padding: 14px 0; border-top: 1px solid var(--line); }
+.feedback-item header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.feedback-item.unread strong { font-weight: 600; }
+.feedback-text { margin: 6px 0 8px; white-space: normal; }
+.feedback-item .hint { margin: 0; }
+
+/* "Made with ♥ in …" above the copyright */
+.made-with { white-space: nowrap; display: inline-block; margin: 2px 0 1px; font-size: 0.875rem; }
+.heart { vertical-align: -2px; margin: 0 1px; }
+/* Every heart on the site beats gently (and in time), unless "reduce motion" is on. */
+.heart { transform-box: fill-box; transform-origin: 50% 60%; animation: heartbeat 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .heart { animation: none; } }
+
+/* --- Insights tab --- */
+.funnel { display: grid; gap: 10px; margin: 8px 0 14px; }
+.funnel-row { display: grid; grid-template-columns: 140px 1fr 90px; align-items: center; gap: 12px; }
+.funnel-label { font-size: 0.9rem; }
+.funnel-bar { width: 100%; height: 18px; }
+.funnel-bar .track { fill: var(--bg); }
+.funnel-bar .fill { fill: #2a78d6; }
+.funnel-value { text-align: right; font-variant-numeric: tabular-nums; }
+.funnel-value small { color: var(--muted); margin-left: 4px; }
+@media (max-width: 520px) { .funnel-row { grid-template-columns: 1fr 70px; } .funnel-bar { grid-column: 1 / -1; grid-row: 2; } }
+.insight-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 20px; }
+.insight-lists .card { margin-bottom: 12px; }
+.card h2 .count { font-size: 0.9rem; color: var(--muted); margin-left: 6px; }
+.people-list { list-style: none; margin: 0; padding: 0; }
+.people-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.people-list .hint { margin: 0; white-space: nowrap; }
+.empty { color: var(--muted); font-size: 0.9rem; }
+.insight-tip { margin: 0 0 20px; }
+.headcount { margin: 8px 0 8px; }
+h3.sub { font-size: 1.05rem; font-weight: 500; margin: 20px 0 8px; }
+.need { display: inline-block; margin: 2px 6px 2px 0; padding: 1px 8px; font-size: 0.85rem; border-radius: 999px; background: var(--bg); }
+.need.medical { background: #fde8e8; color: #9b1c1c; font-weight: 500; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.timeline { width: 100%; height: auto; display: block; margin: 4px 0 8px; }
+.timeline .grid { stroke: var(--line); stroke-width: 1; }
+.timeline .axis { font: 11px var(--font); fill: var(--muted); }
+.timeline .line { fill: none; stroke: #2a78d6; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.timeline .dot { fill: #2a78d6; stroke: var(--card); stroke-width: 2; }
+.timeline .send { stroke: #a8a6a0; stroke-width: 1.5; stroke-dasharray: 3 3; }
+.timeline .hover { fill: transparent; }
+.timeline .hover:hover { fill: rgba(42, 120, 214, 0.08); }
+.key-line, .key-send { display: inline-block; width: 18px; vertical-align: middle; margin-right: 4px; }
+.key-line { border-top: 2px solid #2a78d6; }
+.key-send { border-top: 2px dashed #a8a6a0; }
+.timeline-table summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+
+/* "Add to calendar" under the date on the guest page */
+.add-cal { display: inline-block; position: relative; margin-top: 14px; text-align: left; }
+.add-cal summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+  list-style: none;
+}
+.add-cal summary::-webkit-details-marker { display: none; }
+.add-cal summary::before { content: '📅'; }
+.add-cal ul {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 300px;
+  margin: 8px 0 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(40, 20, 10, 0.15);
+}
+.add-cal li { padding: 8px 10px; border-radius: 6px; }
+.add-cal li + li { border-top: 1px solid var(--line); }
+.add-cal a { color: var(--ink); text-decoration: none; font-weight: 500; display: block; }
+.add-cal a:hover { color: var(--accent); }
+.add-cal .hint { display: block; font-size: 0.8rem; color: var(--muted); }
+
+/* Easter egg: the place name in the footer can be a link that looks like plain text */
+.site-footer a.easter-egg { color: inherit; text-decoration: none; cursor: inherit; }
+.site-footer a.easter-egg:hover { text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.site-footer a.easter-egg:focus-visible { outline: 1px dotted currentColor; outline-offset: 2px; }
+/* Easter eggs in the photo caption: white text that's secretly a link */
+.photo-caption a.easter-egg { color: inherit; text-decoration: none; pointer-events: auto; cursor: inherit; }
+.photo-caption a.easter-egg:hover { text-decoration: underline dotted; text-underline-offset: 4px; cursor: pointer; }
+.photo-caption a.easter-egg:focus-visible { outline: 1px dotted currentColor; outline-offset: 2px; }
+
+/* Easter eggs: invisible links over parts of the photo (PHOTO_HOTSPOTS).
+   .photo-frame covers exactly the same box as the photo (body::before), and
+   each link is placed with the same "cover" maths the browser uses to scale
+   and crop the photo, so it lines up at any screen size. Where that part of
+   the photo is cropped out (e.g. phones), the link is clipped away with it.
+   Each link's --hx/--hy/--hw/--hh (fractions of the photo) come from
+   theme.css.php. */
+.photo-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--photo-h);
+  overflow: hidden;
+  pointer-events: none;
+  container-type: size;
+  z-index: 0;
+}
+.photo-hotspot {
+  --ratio: var(--photo-ratio, 1.5);                  /* photo width / height */
+  --rw: max(100cqw, 100cqh * var(--ratio));          /* drawn photo width  */
+  --rh: max(100cqh, 100cqw / var(--ratio));          /* drawn photo height */
+  --ox: calc((100cqw - var(--rw)) * 0.5);            /* centred across     */
+  --oy: calc((100cqh - var(--rh)) * 0.3);            /* 30% down, as body::before */
+  position: absolute;
+  left: calc(var(--ox) + var(--rw) * var(--hx, 0));
+  top: calc(var(--oy) + var(--rh) * var(--hy, 0));
+  width: calc(var(--rw) * var(--hw, 0));
+  height: calc(var(--rh) * var(--hh, 0));
+  border-radius: 12px;
+  pointer-events: auto;
+}
+.photo-hotspot:focus-visible { outline: 2px dotted #fff; outline-offset: -4px; }
+@media (min-width: 1000px) and (min-aspect-ratio: 5/4) {
+  .photo-frame {
+    position: fixed;
+    bottom: 0;
+    right: auto;
+    height: auto;
+    width: calc(100vh * var(--photo-ratio, 1.5));
+  }
+  .photo-hotspot { --oy: calc((100cqh - var(--rh)) * 0.5); }   /* photo centred here */
+}
+
+/* A soft wash of the photo's own edge colours (sampled from the image)
+   carries on past the photo, so it doesn't stop dead at a cream wall.
+   Wide screens: the right-edge colours continue sideways, fading out
+   towards the right. Tall layouts: sea and greenery tones continue below
+   the photo, fading down into cream around the panel. */
+body.photo-bg::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--photo-h) * 0.55);
+  height: 75vh;
+  z-index: -2;
+  background: var(--wash-tall, linear-gradient(to right, #cfc8bd, #c5bdb0));
+  opacity: 0.32;
+  -webkit-mask-image: linear-gradient(to bottom, #000, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.2) 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.2) 70%, transparent);
+  pointer-events: none;
+}
+@media (min-width: 1000px) and (min-aspect-ratio: 5/4) {
+  body.photo-bg::after {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    height: auto;
+    background: var(--wash-wide, linear-gradient(to bottom, #d9d4cc, #c5bdb0));
+    opacity: 0.4;
+    /* Full strength where the photo fades, easing out towards the right edge. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100vh * var(--photo-ratio, 1.5) * 0.7), rgba(0,0,0,0.55) calc(100vh * var(--photo-ratio, 1.5) + 8vw),
+      rgba(0,0,0,0.2) calc(100vh * var(--photo-ratio, 1.5) + 24vw), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100vh * var(--photo-ratio, 1.5) * 0.7), rgba(0,0,0,0.55) calc(100vh * var(--photo-ratio, 1.5) + 8vw),
+      rgba(0,0,0,0.2) calc(100vh * var(--photo-ratio, 1.5) + 24vw), transparent);
+  }
+}
+/* Phones and the guest page's full-screen photo don't need the wash. */
+@media (max-width: 480px) { body.photo-bg::after { display: none; } }
+@media not all and (min-width: 1000px) and (min-aspect-ratio: 5/4) {
+  body.guest-page::after { display: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body.photo-bg::after { display: none; }
+}
+
+
+/* "© global.ly" credit: quiet link to the project */
+.site-footer .copyright a { color: inherit; text-decoration: none; }
+.site-footer .copyright a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.insight-tip a { color: var(--accent); }
+
+/* --- Page not found ------------------------------------------------- */
+.not-found .big-404 {
+  margin: 0 0 4px; font-size: clamp(4rem, 12vw, 6rem); font-weight: 200; line-height: 1;
+  letter-spacing: 0.04em; color: var(--ink);
+}
+.not-found .big-404 .heart { display: inline-block; margin: 0 0.06em; font-size: 0.8em; color: var(--accent); }
+@keyframes heartbeat {
+  0%, 40%, 100% { transform: scale(1); }
+  12% { transform: scale(1.16); }
+  24% { transform: scale(0.96); }
+  32% { transform: scale(1.1); }
+}
+.not-found .quip { margin: 18px 0 6px; font-size: 1.15rem; font-style: italic; color: var(--ink); }
+.not-found .hint { margin: 0 0 22px; color: var(--muted); }
+.not-found a.button { display: block; text-align: center; text-decoration: none; }
