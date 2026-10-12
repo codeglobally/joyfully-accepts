@@ -157,7 +157,7 @@ php tests/run.php
 That runs the unit tests (name parsing, codes, safe formatting, CSV safety, dietary handling, calendar files, logins). To include end-to-end checks against a running copy of the site (sign-in with a code, RSVP, security headers, admin protection):
 
 ```bash
-WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php -S localhost:8097 -t public_html &
+WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php -S localhost:8097 -t public_html tests/router.php &
 WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php tests/run.php --http=http://localhost:8097
 ```
 

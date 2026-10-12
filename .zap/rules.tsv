@@ -6,6 +6,6 @@
 10202	FAIL	Absence of anti-CSRF tokens
 90022	FAIL	Application error disclosure
 10023	FAIL	Information disclosure: debug error messages
-10021	WARN	X-Content-Type-Options missing: on Apache, .htaccess adds it to static files; the test server (php -S) can't
+10021	FAIL	X-Content-Type-Options header missing
 10035	IGNORE	Strict-Transport-Security: only sent over HTTPS, and the test copy runs on plain HTTP
 10011	IGNORE	Cookie without Secure flag: set automatically over HTTPS; the test copy runs on plain HTTP

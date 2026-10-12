@@ -32,6 +32,6 @@ jobs:
           WEDDING_CONFIG: ${{ github.workspace }}/tests/config.php
           WEDDING_TEST_DB: ${{ runner.temp }}/e2e.sqlite
         run: |
-          php -S localhost:8097 -t public_html > "$RUNNER_TEMP/server.log" 2>&1 &
+          php -S localhost:8097 -t public_html tests/router.php > "$RUNNER_TEMP/server.log" 2>&1 &
           sleep 1
           php tests/run.php --http=http://localhost:8097

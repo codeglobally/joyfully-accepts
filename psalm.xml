@@ -16,7 +16,7 @@
     <projectFiles>
         <directory name="private" />
         <directory name="public_html" />
-        <ignoreFiles>
+        <ignoreFiles allowMissingFiles="true">
             <!-- Your real settings (not in git); the example stands in for them. -->
             <file name="private/config.php" />
             <file name="private/site.php" />

@@ -46,7 +46,7 @@ jobs:
           WEDDING_CONFIG: ${{ github.workspace }}/tests/config.php
           WEDDING_TEST_DB: ${{ runner.temp }}/zap.sqlite
         run: |
-          php -S 0.0.0.0:8097 -t public_html > "$RUNNER_TEMP/server.log" 2>&1 &
+          php -S 0.0.0.0:8097 -t public_html tests/router.php > "$RUNNER_TEMP/server.log" 2>&1 &
           sleep 1
           curl -sf http://localhost:8097/ > /dev/null
 
