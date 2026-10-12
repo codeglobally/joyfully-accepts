@@ -1,0 +1,56 @@
+name: Share your feedback
+description: Used Joyfully Accepts for your wedding (or thinking about it)? Tell us how it went.
+title: "Feedback: "
+labels: [feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Whether it went perfectly or you had to wrestle with it, hearing how the site was actually used is the best way to improve it. Congratulations, too! 🎉
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where are you with it?
+      options:
+        - Just looking / trying it out
+        - Setting it up
+        - Invitations are out
+        - The wedding has happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: good
+    attributes:
+      label: What worked well?
+      placeholder: Guests loved the one-click link, and the dietary list went straight to the caterer.
+
+  - type: textarea
+    id: hard
+    attributes:
+      label: What was hard, confusing or missing?
+      placeholder: Setting up email so it didn't land in spam took a while.
+
+  - type: textarea
+    id: guests
+    attributes:
+      label: Did your guests say anything about it?
+
+  - type: dropdown
+    id: recommend
+    attributes:
+      label: Would you recommend it to another couple?
+      options:
+        - Yes, definitely
+        - Probably
+        - Not sure
+        - Probably not
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before you post
+      options:
+        - label: I've left out guests' names, email addresses, invitation codes and anything else private.
+          required: true

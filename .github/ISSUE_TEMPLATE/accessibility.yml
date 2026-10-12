@@ -1,0 +1,53 @@
+name: Accessibility barrier
+description: Something that's hard or impossible to use with a screen reader, keyboard, zoom, or other assistive technology.
+title: "Accessibility: "
+labels: [accessibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The site aims to meet WCAG 2.1 AA, but automated checks can't catch everything. Thank you for telling us. These reports are given priority.
+
+  - type: textarea
+    id: barrier
+    attributes:
+      label: What's the barrier?
+      description: What were you trying to do, and what got in the way?
+      placeholder: With VoiceOver, the dietary picker doesn't announce which items are already chosen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where is it?
+      options:
+        - Home page (code entry)
+        - Guest invitation / RSVP page
+        - Admin area
+        - Emails
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: input
+    id: tech
+    attributes:
+      label: Assistive technology, browser and device
+      placeholder: VoiceOver on iOS 26, Safari
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: What would work better for you, and any screenshots or recordings.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before you post
+      options:
+        - label: I've removed guests' names, email addresses and invitation codes from anything above.
+          required: true

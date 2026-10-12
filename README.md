@@ -146,7 +146,7 @@ The guest pages and the whole admin area were audited against **WCAG 2.1 level A
 - Form fields have labels, images and icon buttons have text alternatives, and charts come with a table version.
 - Respects "reduce motion" and "reduce transparency" settings, and works without JavaScript (the dietary picker falls back to a plain list).
 
-Automated tools can't catch everything, so if you hit a barrier, please open an issue.
+Automated tools can't catch everything, so if you hit a barrier, please [report it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=accessibility.yml). Accessibility reports are given priority.
 
 ## Running the tests
 
@@ -189,12 +189,21 @@ private/                Never served to browsers
   data/                 SQLite database (created automatically)
 tests/                  Automated tests (run.php) and their settings
 docs/screenshots/       Images for this README
-.github/workflows/      Tests and security scans on GitHub
+.github/               Tests and security scans, issue and pull request templates
 .zap/rules.tsv          Which ZAP scan findings fail the build
 psalm.xml               Settings for the Psalm taint analysis
 SECURITY.md             OWASP review and how to report a vulnerability
 deploy.sh               One-command deploy to cPanel hosting
 ```
+
+## Feedback and contributing
+
+- **Used it for your wedding?** [Tell us how it went](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feedback.yml). It's the best way to improve it.
+- **Found a bug?** [Report it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=bug_report.yml).
+- **Have an idea?** [Suggest it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml).
+- **Found a security problem?** Please report it [privately](https://github.com/codeglobally/joyfully-accepts/security/advisories/new), never in a public issue. See [SECURITY.md](SECURITY.md).
+
+Pull requests are welcome. The aim is to keep it small: plain PHP, no dependencies or build step, working on PHP 7.4+ and shared hosting. Please run the tests first (see [Running the tests](#running-the-tests)).
 
 ## Licence
 

@@ -1,0 +1,83 @@
+name: Something isn't working
+description: Report a bug on the guest pages, admin area, emails or deploy script.
+title: "Bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+        **Found a security problem?** Please don't post it here. Use [private reporting](https://github.com/codeglobally/joyfully-accepts/security/advisories/new) instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect to see?
+      placeholder: When a guest ticks "Not sure yet", the page shows an error instead of saving.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we see it happen?
+      description: The steps to make it happen again, as exactly as you can.
+      placeholder: |
+        1. Sign in as a guest
+        2. Choose "Not sure yet"
+        3. Press Save
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where is the problem?
+      options:
+        - Home page (code entry)
+        - Guest invitation / RSVP page
+        - Admin area
+        - Emails (invitations or updates)
+        - Add to calendar
+        - Deploy script (deploy.sh)
+        - Setting up or configuring
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the footer of every page, e.g. v2.2.
+      placeholder: v2.2
+    validations:
+      required: true
+
+  - type: input
+    id: php
+    attributes:
+      label: PHP version and hosting
+      description: If you know them. cPanel shows the PHP version under "Select PHP Version".
+      placeholder: PHP 8.3 on cPanel shared hosting
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Safari on iPhone 15, Chrome on Windows 11
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, error messages, or lines from your server's error log help a lot.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before you post
+      options:
+        - label: I've removed guests' names, email addresses, invitation codes and my admin password from anything above.
+          required: true

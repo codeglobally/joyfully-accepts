@@ -1,0 +1,42 @@
+name: Idea or feature request
+description: Suggest something that would make the site better for couples or guests.
+title: "Idea: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are very welcome. The aim is to keep the site small and simple (plain PHP, no build step, works on shared hosting), so ideas that fit that are the easiest to add.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do that you can't today?
+      description: Start with the problem rather than the solution.
+      placeholder: I'd like to ask guests whether they need a lift from the station.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: How might it work?
+      description: Your idea for how it could look or behave. Sketches and screenshots welcome.
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who is it for?
+      multiple: true
+      options:
+        - Guests
+        - The couple (admin area)
+        - People setting the site up
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you manage without it now?
+      description: Any workaround you're using, or other ways it could be solved.

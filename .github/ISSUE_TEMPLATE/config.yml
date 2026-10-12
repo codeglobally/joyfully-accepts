@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/codeglobally/joyfully-accepts/security/advisories/new
+    about: Please report security problems privately, never in a public issue. See SECURITY.md.
+  - name: Read the setup guide
+    url: https://github.com/codeglobally/joyfully-accepts#quick-start-on-your-computer
+    about: Installing, configuring, sending emails and deploying are covered in the README.
