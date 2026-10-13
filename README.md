@@ -118,7 +118,7 @@ Emails go out through your host's mail system:
 ## Security
 
 - **Codes:** 31 characters × 8 positions (about 850 billion combinations). Each connection gets 10 wrong guesses per 15 minutes (IPv6 counted per /64), shared with admin sign-ins.
-- **Sessions:** a new session ID at sign-in. Cookies are HttpOnly, SameSite=Lax and Secure over HTTPS. Admin sessions end after 2 hours idle.
+- **Sessions:** a new session ID and form token at sign-in. Cookies are HttpOnly, SameSite=Lax and Secure over HTTPS. Admin sessions end after 2 hours idle or 12 hours in all, and straight away if that person is removed or their password changes (including a new `ADMIN_PASSWORD` in config.php).
 - **Forms:** CSRF tokens everywhere, input read as plain text, and prepared SQL statements.
 - **Output:** HTML-escaped everywhere, a strict Content Security Policy (only the site's own scripts and styles), no framing, HSTS, Permissions-Policy and cross-origin isolation headers, and spreadsheet-formula-safe CSV exports.
 - **Passwords:** at least 12 characters, and extra admins' passwords are bcrypt-hashed. Setup and reset links are stored only as hashes and are single-use.

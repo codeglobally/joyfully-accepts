@@ -186,6 +186,17 @@ set_password((int)$sam['id'], 'a-long-password-here');
 check('setup link works once', user_for_setup_token($token) === null);
 check('new password works', (check_login('sam', 'a-long-password-here')['name'] ?? '') === 'Sam');
 check('password stored hashed', strpos((string)users_db()->query("SELECT password_hash FROM users WHERE username = 'sam'")->fetchColumn(), '$2y$') === 0);
+unset($_SESSION['admin_user']);
+same('a session without a person is nobody, not the owner', false, current_admin()['owner']);
+$ownerKey = admin_session_key(0);
+same('owner session key stays the same', $ownerKey, admin_session_key(0));
+save_setting('owner_fingerprint', 'from an older password');
+check('owner session key changes with ADMIN_PASSWORD', admin_session_key(0) !== $ownerKey);
+check('owner password fingerprint isn\'t the password', strpos(setting('owner_fingerprint'), ADMIN_PASSWORD) === false
+    && setting('owner_fingerprint') !== hash('sha256', ADMIN_PASSWORD));
+$samKey = admin_session_key((int)$sam['id']);
+set_password((int)$sam['id'], 'another-long-password');
+check('a new password changes the session key', admin_session_key((int)$sam['id']) !== $samKey && admin_session_key((int)$sam['id']) !== '');
 
 // --- End-to-end (optional) ---------------------------------------------------
 
@@ -259,6 +270,37 @@ foreach ($argv as $arg) {
     $login = $get('/admin.php');
     $signedIn = $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
     check('owner can sign in', $signedIn['status'] === 302);
+    check('signing in gives a fresh form token', $csrf($get('/admin.php?tab=guests')['body']) !== $csrf($login['body']));
+
+    // Another admin's session ends when their password changes or is reset.
+    $jar2 = tempnam(sys_get_temp_dir(), 'jar');
+    $as2 = function (string $path, ?array $post = null) use ($base, $jar2) {
+        $ch = curl_init($base . $path);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_COOKIEJAR => $jar2, CURLOPT_COOKIEFILE => $jar2]);
+        if ($post !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+        }
+        $raw = (string)curl_exec($ch);
+        return ['status' => curl_getinfo($ch, CURLINFO_RESPONSE_CODE), 'body' => substr($raw, curl_getinfo($ch, CURLINFO_HEADER_SIZE))];
+    };
+    users_db()->prepare('INSERT INTO users (name, username) VALUES (?, ?)')->execute(['Jo', 'jo']);
+    $joId = (int)users_db()->lastInsertId();
+    set_password($joId, 'jo-first-long-password');
+    $joLogin = $as2('/admin.php');
+    $as2('/admin.php', ['csrf' => $csrf($joLogin['body']), 'username' => 'jo', 'password' => 'jo-first-long-password', 'login' => '1']);
+    check('another admin can sign in', strpos($as2('/admin.php?tab=guests')['body'], 'Signed in as Jo') !== false);
+    set_password($joId, 'jo-second-long-password');
+    check('changing their password signs out old sessions', $as2('/admin.php?tab=guests')['status'] === 302
+        && strpos($as2('/admin.php')['body'], 'name="password"') !== false);
+    $joLogin = $as2('/admin.php');
+    $as2('/admin.php', ['csrf' => $csrf($joLogin['body']), 'username' => 'jo', 'password' => 'jo-second-long-password', 'login' => '1']);
+    users_db()->prepare('UPDATE users SET password_hash = NULL WHERE id = ?')->execute([$joId]);   // what "Email reset link" does
+    check('a reset signs them out straight away', $as2('/admin.php?tab=guests')['status'] === 302
+        && strpos($as2('/admin.php')['body'], 'name="password"') !== false);
+    $forged = $as2('/admin.php', ['csrf' => $csrf($joLogin['body']), 'action' => 'user_remove', 'id' => $joId]);
+    check('a signed-out session can\'t act', $forged['status'] !== 200 || strpos($forged['body'], 'Removed') === false);
+    users_db()->prepare('DELETE FROM users WHERE id = ?')->execute([$joId]);
+    @unlink($jar2);
 
     // Greetings: switch the site to first names, then give one invitation its own greeting.
     $form = $get('/admin.php?tab=guests');
@@ -325,6 +367,13 @@ foreach ($argv as $arg) {
     $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected', 'ids' => [$khan, $ken]]);
     check('ticked invitations deleted together', strpos($get('/admin.php?tab=guests')['body'], 'Deleted 2 invitations.') !== false
         && !db()->query("SELECT COUNT(*) FROM guests WHERE id IN (" . (int)$khan . ', ' . (int)$ken . ')')->fetchColumn());
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected', 'ids' => range(100000, 100899)]);
+    check('hundreds ticked at once works (in batches under SQLite\'s limit)', strpos($get('/admin.php?tab=guests')['body'], 'Deleted 0 invitations.') !== false);
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected', 'ids' => range(100000, 101199)]);
+    check('too many ticked for PHP to receive: refused, not half done',
+        strpos($get('/admin.php?tab=guests')['body'], 'more invitations than can be sent in one go') !== false);
     $form = $get('/admin.php?tab=guests');
     $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected']);
     check('nothing ticked, nothing deleted', strpos($get('/admin.php?tab=guests')['body'], 'Tick the invitations you want to delete first.') !== false);

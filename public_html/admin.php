@@ -145,17 +145,15 @@ if (!is_admin()) {
 }
 
 // A removed person's session ends straight away.
-$me = current_admin();
-if ($me['id']) {
-    $q = users_db()->prepare('SELECT 1 FROM users WHERE id = ? AND password_hash IS NOT NULL');
-    $q->execute([$me['id']]);
-    if (!$q->fetchColumn()) {
-        $_SESSION = [];
-        session_destroy();
-        header('Location: /admin.php');
-        exit;
-    }
+// A session ends straight away if its person has been removed or their
+// password has changed since they signed in (see admin_session_valid()).
+if (!admin_session_valid()) {
+    $_SESSION = [];
+    session_destroy();
+    header('Location: /admin.php');
+    exit;
 }
+$me = current_admin();
 
 $unreadFeedback = (int)db()->query('SELECT COUNT(*) FROM feedback WHERE read_at IS NULL')->fetchColumn();
 $tabs = ['guests' => 'Guests', 'insights' => 'Insights', 'email' => 'Invitation email', 'updates' => 'Updates', 'content' => 'Content',
@@ -232,22 +230,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'delete_selected' || $action === 'send_selected') {
         // The ticked rows in the guest table (ids[] from the checkboxes).
         $ids = is_array($_POST['ids'] ?? null) ? $_POST['ids'] : [];
-        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        // PHP drops form fields past max_input_vars (usually 1,000) without saying,
+        // so a request that reaches the limit may be missing some: refuse it.
+        $tooMany = count($ids) >= ((int)ini_get('max_input_vars') ?: 1000) - 10;
+        $ids = $tooMany ? [] : array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        // In batches: older SQLite allows at most 999 values in one query.
+        $batches = array_map(fn($batch) => [$batch, implode(',', array_fill(0, count($batch), '?'))], array_chunk($ids, 500));
         $settings = mail_settings();
-        if (!$ids) {
+        if ($tooMany) {
+            $message = 'That\'s more invitations than can be sent in one go, so nothing was changed. Untick some and do it in two goes.';
+        } elseif (!$ids) {
             $message = 'Tick the invitations you want to ' . ($action === 'send_selected' ? 'send' : 'delete') . ' first.';
         } elseif ($action === 'send_selected') {
             if (!valid_email($settings['from'])) {
                 $message = 'The From address on the Invitation email tab isn\'t valid, so nothing was sent.';
             } else {
                 set_time_limit(300);
-                $q = db()->prepare('SELECT * FROM guests WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') ORDER BY name COLLATE NOCASE');
-                $q->execute($ids);
+                $chosen = [];
+                foreach ($batches as [$batch, $marks]) {
+                    $q = db()->prepare("SELECT * FROM guests WHERE id IN ($marks)");
+                    $q->execute($batch);
+                    $chosen = array_merge($chosen, $q->fetchAll());
+                }
+                usort($chosen, fn($a, $b) => strcasecmp($a['name'], $b['name']));
                 $sent = 0;
                 $resent = 0;
                 $failed = [];
                 $noEmail = [];
-                foreach ($q->fetchAll() as $g) {
+                foreach ($chosen as $g) {
                     if (!sendable_emails($g['email'])) {
                         $noEmail[] = $g['name'];
                     } elseif (send_invite($g, $settings)) {
@@ -267,9 +277,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } else {
-            $q = db()->prepare('DELETE FROM guests WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
-            $q->execute($ids);
-            $deleted = $q->rowCount();
+            $deleted = 0;
+            foreach ($batches as [$batch, $marks]) {
+                $q = db()->prepare("DELETE FROM guests WHERE id IN ($marks)");
+                $q->execute($batch);
+                $deleted += $q->rowCount();
+            }
             $message = 'Deleted ' . $deleted . ' ' . ($deleted === 1 ? 'invitation' : 'invitations') . '.';
         }
     } elseif (in_array($action, ['save_email', 'preview', 'send_test', 'send_all'], true)) {

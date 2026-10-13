@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = $q->fetchColumn();
         if ($id) {
             session_regenerate_id(true);
+            unset($_SESSION['csrf']);   // a fresh form token for the signed-in session
             $_SESSION['guest_id'] = (int)$id;
             header('Location: /guest.php');
             exit;

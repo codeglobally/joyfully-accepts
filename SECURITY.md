@@ -38,7 +38,7 @@ supplies the headers, but TLS is up to your host.
 | **A04 Insecure design** | Guessing codes is rate-limited: 10 wrong tries per 15 minutes per address, with IPv6 counted per /64, and admin sign-ins share the same limit. Setup and reset links work once and expire in 7 days. Unsubscribe links open a confirmation page, so email scanners that "click" links can't unsubscribe anyone. |
 | **A05 Security misconfiguration** | Strict CSP (`default-src 'self'`, no inline script), `frame-ancestors 'none'`, `nosniff`, `no-referrer`, Permissions-Policy, COOP and CORP. Errors are logged, never shown, and `X-Powered-By` is removed. Directory listings are off. Private files sit outside the web root, and `.htaccess` blocks them if they can't. |
 | **A06 Vulnerable components** | There are no dependencies: no Composer packages, no JavaScript libraries, no CDNs. The only thing to keep updated is PHP itself. The site runs on 7.4+, but use a version that still gets security fixes (8.2 or later). |
-| **A07 Authentication failures** | A new session ID at every sign-in. Cookies are HttpOnly, SameSite=Lax, and Secure over HTTPS. Admin sessions end after 2 hours idle. A timing-safe check stops attackers learning which usernames exist. Passwords must be at least 12 characters. |
+| **A07 Authentication failures** | A new session ID and form token at every sign-in. Cookies are HttpOnly, SameSite=Lax, and Secure over HTTPS. Admin sessions end after 2 hours idle or 12 hours in all, and straight away when that person is removed or their password changes: resetting it, choosing a new one, or a new `ADMIN_PASSWORD` in config.php. A session with no signed-in person is treated as nobody, never as the owner. A timing-safe check stops attackers learning which usernames exist. Passwords must be at least 12 characters. |
 | **A08 Integrity failures** | No third-party scripts or styles, and CSP blocks any that might be injected. Nothing from users is ever unserialised or run as code. Deploys go over HTTPS with an expiring cPanel API token. |
 | **A09 Logging and monitoring** | Failed codes and sign-ins are recorded (for rate limiting), and PHP errors go to the server's error log. There's **no audit trail** of admin actions. See Known limits. |
 | **A10 Server-side request forgery** | The server never fetches a URL a user supplied. It only reads its own files (the photo) and the CSV an admin uploads. |
@@ -50,7 +50,7 @@ The checks that apply to a site like this:
 | Area | Status |
 |---|---|
 | V2 Authentication | Met: minimum 12 characters, no composition rules, rate limiting, hashed passwords, single-use expiring reset links. **Not done:** checking passwords against breach lists (2.1.7), and the owner password is stored in plain text in config (see Known limits). |
-| V3 Session management | Met: new ID at sign-in, ended at sign-out, cookie flags, idle timeout for admins. |
+| V3 Session management | Met: new ID and CSRF token at sign-in, ended at sign-out, cookie flags, idle (2 hours) and absolute (12 hours) limits for admins, and sessions ended when a password changes. |
 | V4 Access control | Met: checked on the server for every request, least privilege for extra admins, CSRF protection. |
 | V5 Validation, sanitising and encoding | Met: inputs read as plain strings, length and type checks, escaping by context (HTML, attributes, CSS, CSV, email, iCalendar), parameterised SQL. |
 | V7 Errors and logging | Partly met: no errors shown to visitors, nothing sensitive logged. No admin audit log. |

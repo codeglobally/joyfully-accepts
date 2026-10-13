@@ -40,12 +40,14 @@ document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
     var sendable = ticked.filter(function (b) { return b.dataset.sendable === '1'; });
     var again = sendable.filter(function (b) { return b.dataset.sent === '1'; }).length;
     var skipped = n - sendable.length;
-    count.textContent = n ? n + ' selected' : 'Tick invitations to send or delete several at once.';
+    var tooMany = n > 950;   // PHP only receives about 1,000 form fields at once
+    count.textContent = tooMany ? n + ' selected: too many for one go, so untick some and do it in two goes.'
+      : n ? n + ' selected' : 'Tick invitations to send or delete several at once.';
 
-    del.disabled = n === 0;
+    del.disabled = n === 0 || tooMany;
     del.dataset.confirm = 'Delete ' + (n === 1 ? 'this invitation' : 'these ' + n + ' invitations') + "? This can't be undone.";
 
-    send.disabled = sendable.length === 0;
+    send.disabled = sendable.length === 0 || tooMany;
     sendLabel.textContent = again === 0 ? 'Send selected' : again === sendable.length ? 'Resend selected' : 'Send / resend selected';
     var msg = 'Send the invitation to ' + plural(sendable.length, 'guest') + '?';
     if (again && again === sendable.length) {
