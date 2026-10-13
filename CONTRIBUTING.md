@@ -1,6 +1,6 @@
 # Contributing to Joyfully Accepts
 
-Thank you for helping. Whether it's a bug report, an idea, a fix or a note about how your wedding went, it all makes the site better for the next couple.
+Thank you for helping. Whether it's a bug report, an idea, a suggested fix or a note about how your wedding went, it all makes the site better for the next couple.
 
 ## Ways to help
 
@@ -8,7 +8,8 @@ Thank you for helping. Whether it's a bug report, an idea, a fix or a note about
 - **Report a bug** with the [bug form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=bug_report.yml).
 - **Report an accessibility barrier** with the [accessibility form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=accessibility.yml). These are given priority.
 - **Suggest an idea** with the [idea form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml).
-- **Fix something** with a pull request (see below).
+- **Suggest a fix.** Pull requests are limited to collaborators (see below), but fixes are very welcome in an issue.
+- **Make it your own.** Fork it for your own wedding. That's what the MIT licence is for.
 
 **Security problems** go through [private reporting](https://github.com/codeglobally/joyfully-accepts/security/advisories/new), never a public issue. See [SECURITY.md](SECURITY.md).
 
@@ -25,9 +26,9 @@ These are what keep it easy to install and look after, so changes are judged aga
 - **Secure.** Output is escaped, SQL uses prepared statements, every form has a CSRF token, and nothing breaks the Content Security Policy (so no inline scripts or styles).
 - **Friendly words.** Text on the site is plain, warm British English, written for guests who aren't technical.
 
-A big new feature may not fit even if it's a good idea, so for anything large, please open an idea issue first and we can talk it through.
+A big new feature may not fit even if it's a good idea, so for anything large, please open an idea issue and we can talk it through.
 
-## Running it on your computer
+## Running your own copy
 
 You need PHP 7.4 or later with the `pdo_sqlite` extension (`gd` is optional, for the photo colours).
 
@@ -53,18 +54,17 @@ WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php -S loca
 WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php tests/run.php --http=http://localhost:8097
 ```
 
-GitHub Actions runs these on every pull request, along with a Psalm taint analysis and an OWASP ZAP scan (see [SECURITY.md](SECURITY.md)). Please add a test for anything you fix or add.
+GitHub Actions runs these on every push, along with a Psalm taint analysis and an OWASP ZAP scan (see [SECURITY.md](SECURITY.md)). Forks get the same checks once Actions is switched on in the fork's Actions tab. If you change something, add a test for it.
 
-## Making a pull request
+## About pull requests
 
-1. Fork the repository and make a branch for your change.
-2. Keep it focused: one fix or feature per pull request.
-3. Match the code around it: same naming, same comment style, plain functions, no new layers.
-4. Run the tests, and try anything guests see on a phone as well as a computer.
-5. If you changed how something is set up or behaves, update the README.
-6. Open the pull request and fill in the checklist.
+Pull requests are open to collaborators only, which keeps the project small and easy to look after. If you've fixed something or have an improvement:
 
-By contributing, you agree that your work is shared under the project's [MIT licence](LICENSE).
+1. Open a [bug report](https://github.com/codeglobally/joyfully-accepts/issues/new?template=bug_report.yml) or an [idea](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml) describing it.
+2. Include the change itself: a code snippet in the issue, or a link to the commit in your fork.
+3. If it fits the aims above, it'll be brought in, with credit to you.
+
+By sharing code in an issue, you agree that it can be used under the project's [MIT licence](LICENSE).
 
 ## Be kind
 

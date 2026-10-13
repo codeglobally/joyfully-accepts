@@ -205,7 +205,7 @@ deploy.sh               One-command deploy to cPanel hosting
 - **Have an idea?** [Suggest it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml).
 - **Found a security problem?** Please report it [privately](https://github.com/codeglobally/joyfully-accepts/security/advisories/new), never in a public issue. See [SECURITY.md](SECURITY.md).
 
-Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run it locally, the project's aims and the checklist. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+Pull requests are open to collaborators only, but suggested fixes are welcome in an issue, and you're free to fork it for your own wedding. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run your own copy and the project's aims. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Licence
 
