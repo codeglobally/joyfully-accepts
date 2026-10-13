@@ -53,6 +53,29 @@ same('semicolon separates email', ['Sarah, Tom and Lily', 'sarah@example.com'], 
 same('commas stay in the name', ['Sarah, Tom and Lily', ''], split_guest_line('Sarah, Tom and Lily'));
 same('old comma style with @', ['Mr & Mrs Smith', 'smiths@example.com'], split_guest_line('Mr & Mrs Smith, smiths@example.com'));
 same('whitespace trimmed', ['Bob', 'bob@example.com'], split_guest_line('  Bob ;  bob@example.com '));
+same('a couple with an address each', ['Ali & Jo Khan', 'ali@example.com, jo@example.com'], split_guest_line('Ali & Jo Khan; ali@example.com; jo@example.com'));
+same('commas in the name, two addresses', ['Sarah, Tom and Lily', 'sarah@example.com, tom@example.com'],
+    split_guest_line('Sarah, Tom and Lily; sarah@example.com, tom@example.com'));
+same('old comma style, two addresses', ['Mr & Mrs Smith', 'a@example.com, b@example.com'], split_guest_line('Mr & Mrs Smith, a@example.com, b@example.com'));
+same('non-address after a semicolon kept (so it gets flagged)', ['Bob', 'not-an-email'], split_guest_line('Bob; not-an-email'));
+
+section('Uploading a CSV');
+same('headings, two email columns, notes ignored', [['Ali & Jo Khan', 'ali@example.com, jo@example.com'], ['Uncle Bob', '']],
+    parse_guest_csv("Name,Email,Email 2,Notes\nAli & Jo Khan,ali@example.com,jo@example.com,Vegan\nUncle Bob,,,\n"));
+same('headings in another order', [['Gran', 'gran@example.com']],
+    parse_guest_csv("Email address,Phone,Full name\ngran@example.com,07700 900000,Gran\n"));
+same('Excel: semicolons and byte-order mark', [['Sarah Jones', 'sarah@example.com']],
+    parse_guest_csv("\xEF\xBB\xBFName;Email\r\nSarah Jones;sarah@example.com\r\n"));
+same('no headings: quoted name with commas, then addresses', [['Sarah, Tom and Lily', 'sarah@example.com, tom@example.com'], ['Uncle Bob', '']],
+    parse_guest_csv("\"Sarah, Tom and Lily\",sarah@example.com,tom@example.com\nUncle Bob\n"));
+same('no headings: other cells without an @ ignored', [['Priya Shah', 'priya@example.com']],
+    parse_guest_csv("Priya Shah,Table 4,priya@example.com\n"));
+same('tab-separated', [['Grace Kim', 'grace@example.com']], parse_guest_csv("Name\tEmail\nGrace Kim\tgrace@example.com\n"));
+same('a wrong address is kept so it can be flagged', [['Bob', 'not-an-email']], parse_guest_csv("Name,Email\nBob,not-an-email\n"));
+same('blank rows and blank names skipped', [['Ken', '']], parse_guest_csv("Name,Email\n\n,lost@example.com\nKen,\n"));
+if (function_exists('mb_convert_encoding')) {
+    same('older Excel encoding converted', [['Zoë', 'zoe@example.com']], parse_guest_csv("Name,Email\nZo\xEB,zoe@example.com\n"));
+}
 
 section('Invitation codes');
 $code = generate_code();
@@ -90,6 +113,11 @@ section('Email');
 check('valid address accepted', valid_email('alex@example.com'));
 check('header injection rejected', !valid_email("alex@example.com\r\nBcc: x@example.com"));
 check('two addresses rejected', !valid_email('a@example.com, b@example.com'));
+same('addresses split on commas, semicolons and spaces', ['a@example.com', 'b@example.com', 'c@example.com'], email_list(' a@example.com;b@example.com , c@example.com '));
+same('addresses tidied and repeats dropped', 'a@example.com, b@example.com', clean_emails('a@example.com; b@example.com, a@example.com'));
+same('only good addresses are emailed', ['a@example.com'], sendable_emails('a@example.com, not-an-email'));
+check('a bad address is noticed', has_bad_email('a@example.com, not-an-email') && !has_bad_email('a@example.com, b@example.com') && !has_bad_email(''));
+check('no line breaks reach a mail header', !preg_grep('/[\r\n]/', sendable_emails("a@example.com\r\nBcc: x@example.com")));
 same('header encoding', '=?UTF-8?B?' . base64_encode('Zoë') . '?=', encode_header('Zoë'));
 
 // --- Dietary, RSVP and insights ---------------------------------------
@@ -205,6 +233,37 @@ foreach ($argv as $arg) {
     check('calendar download', stripos($get('/calendar.php')['headers'], 'content-type: text/calendar') !== false);
     check('admin needs sign-in', strpos($get('/admin.php?tab=insights')['body'], 'name="password"') !== false);
     check('caterer CSV needs sign-in', stripos($get('/admin.php?export=caterer')['headers'], 'text/csv') === false);
+
+    // Admin: sign in as the owner, upload a CSV, then email a couple with an address each.
+    $login = $get('/admin.php');
+    $signedIn = $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
+    check('owner can sign in', $signedIn['status'] === 302);
+    $csvFile = tempnam(sys_get_temp_dir(), 'csv');
+    file_put_contents($csvFile, "Name,Email,Email 2\nAli & Jo Khan,ali@example.com,jo@example.com\nUncle Ken,ken@example.com,\n");
+    $upload = function () use ($get, $csrf, $csvFile) {
+        $form = $get('/admin.php?tab=guests');
+        return $get('/admin.php', null, [CURLOPT_POSTFIELDS => ['csrf' => $csrf($form['body']), 'action' => 'upload_csv',
+            'csv' => new CURLFile($csvFile, 'text/csv', 'guests.csv')]]);
+    };
+    $upload();
+    $list = $get('/admin.php?tab=guests')['body'];
+    check('CSV upload adds invitations', strpos($list, 'Added 2 invitations.') !== false && strpos($list, 'Uncle Ken') !== false);
+    check('both addresses shown for a couple', (bool)preg_match('#<span class="email-address">ali@example\.com</span>\s*<span class="email-address">jo@example\.com</span>#', $list));
+    $upload();
+    check('uploading the same file again skips them', strpos($get('/admin.php?tab=guests')['body'], 'Skipped 2 already on the list') !== false);
+    $forgedUpload = $get('/admin.php', null, [CURLOPT_POSTFIELDS => ['action' => 'upload_csv', 'csv' => new CURLFile($csvFile, 'text/csv', 'guests.csv')]]);
+    check('upload needs a CSRF token', $forgedUpload['status'] === 400);
+    @unlink($csvFile);
+
+    $mailLog = dirname(DB_PATH) . '/mail.log';
+    @unlink($mailLog);
+    $khan = db()->query("SELECT id FROM guests WHERE name = 'Ali & Jo Khan'")->fetchColumn();
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'send_one', 'id' => $khan]);
+    $log = (string)@file_get_contents($mailLog);
+    check('invitation sent to each address', substr_count($log, '==== ') === 2 && strpos($log, '<ali@example.com>') !== false && strpos($log, '<jo@example.com>') !== false);
+    check('sending marks the invitation as emailed', db()->query("SELECT invited_at FROM guests WHERE id = " . (int)$khan)->fetchColumn() !== null);
+    @unlink($mailLog);
     @unlink($jar);
 }
 

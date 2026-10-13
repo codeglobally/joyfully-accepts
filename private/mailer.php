@@ -40,6 +40,34 @@ function valid_email(?string $email): bool
     return $email !== null && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 
+// An invitation can have more than one address (say, a couple with an email
+// each). They're kept together in the guest's email column, separated by
+// commas: "sarah@example.com, tom@example.com".
+
+// Splits typed addresses apart, whether separated by commas, semicolons or spaces.
+function email_list(?string $emails): array
+{
+    return array_values(array_filter(preg_split('/[\s,;]+/', (string)$emails), 'strlen'));
+}
+
+// Tidies typed addresses into the stored form ('' for none).
+function clean_emails(string $emails): string
+{
+    return implode(', ', array_unique(email_list($emails)));
+}
+
+// The addresses that can actually be emailed (any that look wrong are left out).
+function sendable_emails(?string $emails): array
+{
+    return array_values(array_filter(email_list($emails), 'valid_email'));
+}
+
+// True if any of the addresses looks wrong.
+function has_bad_email(?string $emails): bool
+{
+    return count(sendable_emails($emails)) < count(email_list($emails));
+}
+
 // The photo at the top of the email. It's embedded in the email itself
 // (so mail apps show it without asking to "load images"); the preview in
 // admin loads it from the website instead.
@@ -195,14 +223,18 @@ function send_email(string $to, string $toName, string $subject, string $text, s
     return $sent || mail($toHeader, encode_header($subject), $body, implode("\r\n", $headers));
 }
 
+// Sends the invitation to each of the guest's addresses. Returns true only if
+// every one went; it counts as sent (invited_at) once any of them has.
 function send_invite(array $guest, array $settings): bool
 {
     [$subject, $text, $html] = render_invite($guest, $settings);
-    if (!send_email((string)$guest['email'], $guest['name'], $subject, $text, $html, $settings)) {
-        return false;
+    $to = sendable_emails($guest['email'] ?? null);
+    $sent = 0;
+    foreach ($to as $address) {
+        $sent += send_email($address, $guest['name'], $subject, $text, $html, $settings) ? 1 : 0;
     }
-    if (isset($guest['id'])) {
+    if ($sent && isset($guest['id'])) {
         db()->prepare('UPDATE guests SET invited_at = CURRENT_TIMESTAMP WHERE id = ?')->execute([$guest['id']]);
     }
-    return true;
+    return $to && $sent === count($to);
 }

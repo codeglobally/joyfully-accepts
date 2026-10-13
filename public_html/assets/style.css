@@ -316,6 +316,13 @@ td.dietary-cell { white-space: normal; min-width: 130px; max-width: 280px; }
 /* Let long names and email addresses wrap rather than widen the table. */
 td.name-cell { white-space: normal; min-width: 110px; max-width: 220px; }
 td.email-cell { white-space: normal; overflow-wrap: anywhere; min-width: 150px; max-width: 260px; }
+.email-address { display: block; }              /* one address per line when there are several */
+.edit-email { flex: 1 1 100%; margin: -4px 0 0; }
+/* Upload a CSV, under the "Add invitations" box. */
+.csv-upload { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.csv-upload .hint { margin: 4px 0 12px; }
+.csv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.csv-row input[type="file"] { flex: 1 1 220px; font: 0.95rem var(--font); color: var(--ink); }
 .edit-people { flex: 1 1 100%; margin: 0; }
 
 .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }

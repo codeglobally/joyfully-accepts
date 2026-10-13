@@ -179,26 +179,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $back = 'guests';          // the tab to return to
     $backExtra = '';           // e.g. reopen an editor
 
-    if ($action === 'add') {
-        // One guest per line: "Name; email" (email optional). Commas belong to
-        // the name ("Sarah, Tom and Lily"); see split_guest_line().
-        $insert = db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, ?)');
-        $added = 0;
-        $bad = [];
-        foreach (preg_split('/\r?\n/', input($_POST, 'guests')) as $line) {
-            [$name, $email] = split_guest_line($line);
-            if ($name === '') {
-                continue;
+    if ($action === 'add' || $action === 'upload_csv') {
+        // Typed lines: "Name; email" or "Name; email; email" (emails optional).
+        // Commas belong to the name ("Sarah, Tom and Lily"); see split_guest_line().
+        // Uploads: a CSV file read by parse_guest_csv(), never saved anywhere.
+        $rows = [];
+        $problem = '';
+        if ($action === 'add') {
+            foreach (preg_split('/\r?\n/', input($_POST, 'guests')) as $line) {
+                $row = split_guest_line($line);
+                if ($row[0] !== '') {
+                    $rows[] = $row;
+                }
             }
-            if ($email !== '' && !valid_email($email)) {
-                $bad[] = $name;
+        } else {
+            $file = $_FILES['csv'] ?? null;
+            if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
+                $problem = 'Choose a CSV file to upload.';
+            } elseif ($file['size'] > 1024 * 1024) {
+                $problem = 'That file is over 1 MB. A guest list should be much smaller, so check it\'s the right file.';
+            } else {
+                $rows = parse_guest_csv((string)file_get_contents((string)$file['tmp_name']));
+                if (count($rows) > 2000) {
+                    [$rows, $problem] = [[], 'That file has more than 2,000 rows, so nothing was added. Check it\'s the right file.'];
+                } elseif (!$rows) {
+                    $problem = 'No names found in that file. Put each invitation on its own row, with the name in the first column.';
+                }
             }
-            $insert->execute([generate_code(), $name, $email !== '' ? $email : null]);
-            $added++;
         }
-        $message = "Added $added " . ($added === 1 ? 'invitation' : 'invitations') . '.';
-        if ($bad) {
-            $message .= ' These email addresses look wrong, so they won\'t be emailed: ' . implode(', ', $bad) . '.';
+        if ($problem) {
+            $message = $problem;
+        } else {
+            [$added, $bad, $skipped] = add_guests($rows, $action === 'upload_csv');
+            $message = "Added $added " . ($added === 1 ? 'invitation' : 'invitations') . '.';
+            if ($skipped) {
+                $message .= ' Skipped ' . count($skipped) . ' already on the list: ' . implode(', ', array_slice($skipped, 0, 10))
+                    . (count($skipped) > 10 ? ' and ' . (count($skipped) - 10) . ' more' : '') . '.';
+            }
+            if ($bad) {
+                $message .= ' These have an email address that looks wrong, so it won\'t be used: ' . implode(', ', $bad) . '.';
+            }
         }
     } elseif ($action === 'delete') {
         db()->prepare('DELETE FROM guests WHERE id = ?')->execute([(int)input($_POST, 'id')]);
@@ -231,7 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             set_time_limit(300);
             $pending = array_filter(
                 db()->query('SELECT * FROM guests WHERE invited_at IS NULL')->fetchAll(),
-                fn($g) => valid_email($g['email'])
+                fn($g) => sendable_emails($g['email'])
             );
             $sent = 0;
             $failed = [];
@@ -252,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'update') {
         $id = (int)input($_POST, 'id');
         $name = trim(input($_POST, 'name'));
-        $email = trim(input($_POST, 'email'));
+        $email = clean_emails(input($_POST, 'email'));
         $q = db()->prepare('SELECT * FROM guests WHERE id = ?');
         $q->execute([$id]);
         $g = $q->fetch();
@@ -261,15 +281,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($name === '') {
             $message = 'The name can\'t be empty, so nothing was changed.';
         } else {
-            // A new email address hasn't been sent anything yet.
-            $emailChanged = $email !== (string)$g['email'];
+            // A new address hasn't been sent anything yet.
+            $emailChanged = $email !== clean_emails((string)$g['email']);
             db()->prepare('UPDATE guests SET name = ?, email = ?, invited_at = ? WHERE id = ?')
                 ->execute([$name, $email !== '' ? $email : null, $emailChanged ? null : $g['invited_at'], $id]);
             $message = 'Saved changes to ' . $name . '.';
-            if ($email !== '' && !valid_email($email)) {
-                $message .= ' That email address looks wrong, so they won\'t be emailed.';
+            if (has_bad_email($email)) {
+                $message .= sendable_emails($email)
+                    ? ' One of the email addresses looks wrong, so only the others will be used.'
+                    : ' That email address looks wrong, so they won\'t be emailed.';
             } elseif ($emailChanged && $email !== '' && $g['invited_at']) {
-                $message .= ' Their new address hasn\'t been sent the invitation yet.';
+                $message .= count(sendable_emails($email)) > 1
+                    ? ' The changed addresses haven\'t been sent the invitation yet. Sending it again sends a copy to each address.'
+                    : ' Their new address hasn\'t been sent the invitation yet.';
             }
         }
     } elseif ($action === 'send_one') {
@@ -277,9 +301,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $q->execute([(int)input($_POST, 'id')]);
         $g = $q->fetch();
         if ($g) {
+            $count = count(sendable_emails($g['email']));
             $message = send_invite($g, mail_settings())
-                ? 'Invitation sent to ' . $g['name'] . '.'
-                : 'Could not send to ' . $g['name'] . '. Check their email address and the From address.';
+                ? 'Invitation sent to ' . $g['name'] . ($count > 1 ? ($count === 2 ? ' (both addresses)' : " (all $count addresses)") : '') . '.'
+                : 'Could not send to ' . $g['name'] . ($count > 1 ? ' (at least one address)' : '') . '. Check their email address and the From address.';
         }
 
     // --- Updates (bulk emails) ---
@@ -577,7 +602,7 @@ foreach ($guests as $g) {
         $people += $who['count'];
         $peopleUnknown = $peopleUnknown || !$who['known'];
     }
-    if ($g['invited_at'] === null && valid_email($g['email'])) {
+    if ($g['invited_at'] === null && sendable_emails($g['email'])) {
         $unsent++;
     }
 }
@@ -643,9 +668,21 @@ page_header('Admin', 'admin');
     <h2>Add invitations</h2>
     <form method="post">
       <?= csrf_field() ?>
-      <label for="guests">One per line: <em>Name; email</em>. Email is optional. Each line gets its own code.</label>
-      <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Uncle Bob"></textarea>
+      <label for="guests">One per line: <em>Name; email</em>. Email is optional, and a couple can have one each
+        (<em>Name; email; email</em>). Each line gets its own code.</label>
+      <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Ali &amp; Jo Khan; ali@example.com; jo@example.com&#10;Uncle Bob"></textarea>
       <button type="submit" name="action" value="add">Add</button>
+    </form>
+    <form method="post" enctype="multipart/form-data" class="csv-upload">
+      <?= csrf_field() ?>
+      <label for="csv">Or upload a spreadsheet saved as CSV</label>
+      <p class="hint" id="csv-hint">One invitation per row: the name in the first column, then any email addresses in the
+        next columns. Headings like <em>Name</em>, <em>Email</em> and <em>Email 2</em> are fine, and other columns are ignored.
+        Names already on the list are skipped, so it's safe to upload an updated file.</p>
+      <div class="csv-row">
+        <input id="csv" type="file" name="csv" accept=".csv,text/csv" required aria-describedby="csv-hint">
+        <button type="submit" name="action" value="upload_csv">Upload</button>
+      </div>
     </form>
   </section>
 
@@ -667,7 +704,9 @@ page_header('Admin', 'admin');
           Separate people with <code>&amp;</code>, <code>,</code> or <code>and</code>; add a plus-one with <code>+ guest</code>.
         </p>
         <label>Name<input type="text" name="name" value="<?= h($g['name']) ?>" required autofocus></label>
-        <label>Email<input type="email" name="email" value="<?= h($g['email']) ?>" placeholder="Optional"></label>
+        <label>Email<input type="text" name="email" value="<?= h($g['email']) ?>" placeholder="Optional"
+          inputmode="email" autocomplete="off" spellcheck="false" aria-describedby="email-hint"></label>
+        <p class="hint edit-email" id="email-hint">For two or more addresses, separate them with commas. Each gets its own copy.</p>
         <button type="submit" name="action" value="update">Save</button>
         <a class="link" href="/admin.php?tab=guests#guest-<?= (int)$g['id'] ?>">Cancel</a>
       </form>
@@ -683,8 +722,9 @@ page_header('Admin', 'admin');
           <tr id="guest-<?= (int)$g['id'] ?>" <?= $g['id'] == $editId ? 'class="editing"' : '' ?>>
             <td class="name-cell"><?= h($g['name']) ?></td>
             <td class="email-cell">
-              <?= h($g['email']) ?>
-              <?php if ((string)$g['email'] !== '' && !valid_email($g['email'])): ?><span class="pill no">Check address</span><?php endif; ?>
+              <?php foreach (email_list($g['email']) as $address): ?>
+                <span class="email-address"><?= h($address) ?><?php if (!valid_email($address)): ?> <span class="pill no">Check address</span><?php endif; ?></span>
+              <?php endforeach; ?>
             </td>
             <td>
               <code><?= h($g['code']) ?></code>
@@ -692,7 +732,7 @@ page_header('Admin', 'admin');
             </td>
             <td>
               <?= $g['invited_at'] ? h(date('j M', strtotime($g['invited_at'] . ' UTC'))) : '—' ?>
-              <?php if (valid_email($g['email'])): ?>
+              <?php if (sendable_emails($g['email'])): ?>
                 <form method="post" class="inline"
                       <?= $g['invited_at'] ? 'data-confirm="Send ' . h($g['name']) . ' their invitation again?"' : '' ?>>
                   <?= csrf_field() ?>
@@ -711,7 +751,7 @@ page_header('Admin', 'admin');
             </td>
             <td class="dietary-cell"><?= $status === 'yes' && dietary_summary($g) !== '' ? h(dietary_summary($g)) : '—' ?></td>
             <td>
-              <?php if (!valid_email($g['email'])): ?>—
+              <?php if (!sendable_emails($g['email'])): ?>—
               <?php elseif ((int)$g['notify'] === 1): ?><span class="pill yes" title="Happy to get update emails">On</span>
               <?php else: ?><span class="pill waiting" title="Opted out of update emails">Off</span>
               <?php endif; ?>

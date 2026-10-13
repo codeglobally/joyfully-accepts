@@ -24,7 +24,7 @@ const APP_DIR = __DIR__;
 
 // Bump this with every release. It's shown in the lightbox footer and also
 // makes browsers fetch fresh copies of the stylesheet and scripts.
-const SITE_VERSION = '2.2';
+const SITE_VERSION = '2.3';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';
@@ -259,23 +259,118 @@ function dietary_summary(array $guest): string
     return implode('; ', $items);
 }
 
-// Splits a line from "Add invitations" into [name, email].
-//   "Sarah, Tom and Lily; sarah@example.com"  -> email after the semicolon
-//   "Sarah & Tom, sarah@example.com"          -> old comma style still works,
-//                                                but only if the last part has an @
-//   "Sarah, Tom and Lily"                     -> all of it is the name
+// Splits a line from "Add invitations" into [name, emails]. The addresses
+// start at the first part with an @ in it, so a couple can have one each.
+//   "Sarah, Tom and Lily; sarah@example.com"             -> email after the semicolon
+//   "Sarah & Tom; sarah@example.com; tom@example.com"    -> both addresses
+//   "Sarah & Tom, sarah@example.com"                     -> old comma style still works
+//   "Sarah, Tom and Lily"                                -> all of it is the name
 function split_guest_line(string $line): array
 {
     $line = trim($line);
+    foreach ([';', ','] as $separator) {
+        $parts = explode($separator, $line);
+        for ($i = 1; $i < count($parts); $i++) {
+            if (strpos($parts[$i], '@') !== false) {
+                return [trim(implode($separator, array_slice($parts, 0, $i))), clean_emails(implode(',', array_slice($parts, $i)))];
+            }
+        }
+    }
     if (strpos($line, ';') !== false) {
+        // "Name; something" with no @: keep it, so it's flagged as a bad address.
         $at = strrpos($line, ';');
         return [trim(substr($line, 0, $at)), trim(substr($line, $at + 1))];
     }
-    $at = strrpos($line, ',');
-    if ($at !== false && strpos(substr($line, $at + 1), '@') !== false) {
-        return [trim(substr($line, 0, $at)), trim(substr($line, $at + 1))];
-    }
     return [$line, ''];
+}
+
+// Reads an uploaded CSV of invitations into [[name, emails], …].
+// One invitation per row: a name, then any email addresses. A first row of
+// headings ("Name", "Email", "Email 2"…) is recognised: the name comes from
+// the first column headed Name, Guest(s) or Invitation, the addresses from
+// every column with "mail" in its heading, and anything else (notes, phone
+// numbers) is ignored. Without headings, the first column is the name and any
+// other cell containing an @ is an address. Works with commas, semicolons or
+// tabs between columns, and with files saved from Excel or Numbers.
+function parse_guest_csv(string $csv): array
+{
+    $csv = (string)preg_replace('/^\xEF\xBB\xBF/', '', $csv);   // Excel's byte-order mark
+    if (!preg_match('//u', $csv) && function_exists('mb_convert_encoding')) {
+        $csv = (string)mb_convert_encoding($csv, 'UTF-8', 'Windows-1252');   // older Excel
+    }
+    $first = strtok($csv, "\n") ?: '';
+    $counts = [',' => substr_count($first, ','), ';' => substr_count($first, ';'), "\t" => substr_count($first, "\t")];
+    $delimiter = array_search(max($counts), $counts, true);
+
+    $in = fopen('php://memory', 'r+');
+    fwrite($in, $csv);
+    rewind($in);
+    $rows = [];
+    $nameCol = 0;
+    $emailCols = null;   // null = no headings: any other cell with an @
+    $line = 0;
+    while (($cells = fgetcsv($in, 0, (string)$delimiter, '"', '')) !== false) {
+        $cells = array_map(fn($c) => trim((string)$c), $cells);
+        $heading = '/^(full |guest |first |party )?(names?|guests?|invit\w*|e-?mails?( address(es)?)?)( ?\d+)?$/i';
+        if ($line++ === 0 && !preg_grep('/@/', $cells) && preg_grep($heading, $cells)) {
+            $emailCols = array_keys(preg_grep('/mail/i', $cells));
+            $named = array_keys(array_diff_key(preg_grep('/name|guest|invit/i', $cells), array_flip($emailCols)));
+            $nameCol = $named ? $named[0] : 0;
+            continue;
+        }
+        $name = $cells[$nameCol] ?? '';
+        if ($emailCols === null && count($cells) === 1) {
+            [$name, $emails] = split_guest_line($name);   // a single column of "Name; email" lines
+        } else {
+            $emails = [];
+            foreach ($cells as $i => $cell) {
+                if ($i !== $nameCol && $cell !== '' && ($emailCols === null ? strpos($cell, '@') !== false : in_array($i, $emailCols, true))) {
+                    $emails[] = $cell;
+                }
+            }
+            $emails = clean_emails(implode(',', $emails));
+        }
+        if ($name !== '') {
+            $rows[] = [$name, $emails];
+        }
+    }
+    fclose($in);
+    return $rows;
+}
+
+// Adds invitations from [[name, emails], …], each with its own code.
+// $skipExisting leaves out names already on the list (so uploading the same
+// file twice doesn't double up). Returns [added, names with a bad address,
+// names skipped].
+function add_guests(array $rows, bool $skipExisting = false): array
+{
+    // Names compare without caring about capitals (mbstring copes with accents too).
+    $key = fn(string $name) => function_exists('mb_strtolower') ? mb_strtolower(trim($name)) : strtolower(trim($name));
+    $existing = [];
+    if ($skipExisting) {
+        foreach (db()->query('SELECT name FROM guests')->fetchAll() as $g) {
+            $existing[$key($g['name'])] = true;
+        }
+    }
+    $insert = db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, ?)');
+    $added = 0;
+    $bad = [];
+    $skipped = [];
+    foreach ($rows as [$name, $emails]) {
+        if (isset($existing[$key($name)])) {
+            $skipped[] = $name;
+            continue;
+        }
+        if (has_bad_email($emails)) {
+            $bad[] = $name;
+        }
+        $insert->execute([generate_code(), $name, $emails !== '' ? $emails : null]);
+        if ($skipExisting) {
+            $existing[$key($name)] = true;   // and a repeat within the same file
+        }
+        $added++;
+    }
+    return [$added, $bad, $skipped];
 }
 
 // Dietary requirements across everyone coming, for the admin summary.

@@ -1,6 +1,6 @@
 # Joyfully Accepts
 
-[![Version](https://img.shields.io/badge/version-2.2-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
+[![Version](https://img.shields.io/badge/version-2.3-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
 [![Tests](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml/badge.svg)](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml)
 [![Security](https://github.com/codeglobally/joyfully-accepts/actions/workflows/security.yml/badge.svg)](SECURITY.md)
 [![WCAG 2.1 AA](https://img.shields.io/badge/WCAG_2.1-AA-2e7d32)](#accessibility)
@@ -42,7 +42,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 - Works well on phones, tablets and desktops.
 
 **For you (admin)**
-- **Guests:** add invitations in bulk (`Name; email` per line), edit, delete, copy links, and download a CSV. Summary counts, plus a dietary requirements donut chart.
+- **Guests:** add invitations in bulk (`Name; email` per line) or by uploading a spreadsheet saved as CSV, edit, delete, copy links, and download a CSV. A couple can have an email address each, and both get the invitation and updates. Summary counts, plus a dietary requirements donut chart.
 - **Insights:** RSVP funnel (invited → emailed → visited → replied), who to nudge, headcount range, caterer-ready dietary list with allergies flagged (CSV), and replies over time.
 - **Invitation email:** styled HTML email with your photo, preview, test send, and send to everyone not yet emailed.
 - **Updates:** email news to everyone or a group (coming, not replied…), with templates, one-click unsubscribe and a history.
@@ -109,7 +109,7 @@ Emails go out through your host's mail system:
 
 ## Admin guide
 
-- **Adding guests:** one invitation per line, as `Name; email` (email optional). One line per household (`Sarah, Tom and Lily Jones; sarah@example.com`). The name decides the RSVP's tick boxes: separate people with `&`, `,` or `and`, add a plus-one with `+ guest`, and use "Family" for an unknown number. The edit form shows how a name is being split.
+- **Adding guests:** one invitation per line, as `Name; email` (email optional). One line per household (`Sarah, Tom and Lily Jones; sarah@example.com`). If a couple have an email each, add both (`Ali & Jo Khan; ali@example.com; jo@example.com`): each address gets its own copy of every email. To add a whole list at once, upload a spreadsheet saved as CSV, with the name in the first column and any email addresses in the next columns (headings like *Name*, *Email*, *Email 2* are fine, and other columns are ignored). Names already on the list are skipped, so you can upload an updated file safely. The name decides the RSVP's tick boxes: separate people with `&`, `,` or `and`, add a plus-one with `+ guest`, and use "Family" for an unknown number. The edit form shows how a name is being split.
 - **Logins:** the owner signs in as `admin` with `ADMIN_PASSWORD`, which can't be reset by email, so there's always a way in. Add others on the **People** tab: they get an emailed (or copied) one-time setup link, valid 7 days, and choose their own password. They can use every tab except People, and **Forgot password?** emails them a reset link.
 - **Content formatting:** blank line = new paragraph, `## ` = subheading, `- ` = bullet, `**bold**`, `*italic*`, `[text](https://…)` = link, and `[large]…[/large]` (also `small` and `xlarge`) = text size. The toolbar adds these for you.
 - **Email placeholders:** `{name}`, `{link}` and `{code}` are filled in for each guest. In emails, the link appears as a button.

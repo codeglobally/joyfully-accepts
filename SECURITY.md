@@ -41,7 +41,7 @@ supplies the headers, but TLS is up to your host.
 | **A07 Authentication failures** | A new session ID at every sign-in. Cookies are HttpOnly, SameSite=Lax, and Secure over HTTPS. Admin sessions end after 2 hours idle. A timing-safe check stops attackers learning which usernames exist. Passwords must be at least 12 characters. |
 | **A08 Integrity failures** | No third-party scripts or styles, and CSP blocks any that might be injected. Nothing from users is ever unserialised or run as code. Deploys go over HTTPS with an expiring cPanel API token. |
 | **A09 Logging and monitoring** | Failed codes and sign-ins are recorded (for rate limiting), and PHP errors go to the server's error log. There's **no audit trail** of admin actions. See Known limits. |
-| **A10 Server-side request forgery** | The server never fetches a URL a user supplied. Its only file reads are the site's own photo. |
+| **A10 Server-side request forgery** | The server never fetches a URL a user supplied. It only reads its own files (the photo) and the CSV an admin uploads. |
 
 ## OWASP ASVS 4.0 level 1
 
@@ -56,7 +56,7 @@ The checks that apply to a site like this:
 | V7 Errors and logging | Partly met: no errors shown to visitors, nothing sensitive logged. No admin audit log. |
 | V8 Data protection | Met: guest pages aren't cached (`no-store`), are marked `noindex`, and send no referrer. No third parties receive any data. |
 | V9 Communications | Met: HTTPS only, with HSTS. TLS quality depends on your host (the reference install scores A+). |
-| V12 Files | Not applicable: no uploads. |
+| V12 Files | Met: the only upload is the guest-list CSV in the admin area. It needs an admin sign-in and a CSRF token, is limited to 1 MB and 2,000 rows, is read in memory, and is never saved or served. Each address in it is checked like a typed one. |
 | V13 API | Not applicable: no public API. |
 | V14 Configuration | Met: no dependencies to patch, security headers, private files kept out of the web root. |
 
