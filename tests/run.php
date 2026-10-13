@@ -11,10 +11,74 @@ putenv('WEDDING_CONFIG=' . __DIR__ . '/config.php');
 $_SERVER['DOCUMENT_ROOT'] = dirname(__DIR__) . '/public_html';
 ob_start();   // lib.php sends headers; keep CLI output clean
 require dirname(__DIR__) . '/private/lib.php';
-foreach (['content', 'mailer', 'notify', 'users', 'insights', 'calendar'] as $module) {
+foreach (['content', 'mailer', 'notify', 'users', 'insights', 'calendar', 'passkeys'] as $module) {
     require APP_DIR . "/$module.php";
 }
 ob_end_clean();
+
+// --- A pretend passkey device -------------------------------------------------
+// Makes real keys with openssl and builds exactly what a browser sends, so the
+// passkey checks can be tested, including every way of tampering with it.
+
+class CborText { public $text; function __construct($t) { $this->text = $t; } }
+
+function cbor_encode($v): string
+{
+    $head = function (int $major, int $n): string {
+        if ($n < 24) return chr($major << 5 | $n);
+        if ($n < 256) return chr($major << 5 | 24) . chr($n);
+        if ($n < 65536) return chr($major << 5 | 25) . pack('n', $n);
+        return chr($major << 5 | 26) . pack('N', $n);
+    };
+    if ($v === false || $v === true || $v === null) return chr(0xe0 | ($v === null ? 22 : ($v ? 21 : 20)));
+    if (is_int($v)) return $v >= 0 ? $head(0, $v) : $head(1, -1 - $v);
+    if ($v instanceof CborText) return $head(3, strlen($v->text)) . $v->text;
+    if (is_string($v)) return $head(2, strlen($v)) . $v;
+    if (is_array($v) && $v && array_keys($v) === range(0, count($v) - 1)) {
+        return $head(4, count($v)) . implode('', array_map('cbor_encode', $v));
+    }
+    $out = $head(5, count((array)$v));
+    foreach ((array)$v as $k => $item) {
+        $out .= (is_int($k) ? cbor_encode($k) : cbor_encode(new CborText($k))) . cbor_encode($item);
+    }
+    return $out;
+}
+
+function test_device(string $kind = 'ec', int $bits = 2048): array
+{
+    if ($kind === 'ec') {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        $d = openssl_pkey_get_details($key)['ec'];
+        $cose = [1 => 2, 3 => -7, -1 => 1, -2 => str_pad($d['x'], 32, "\0", STR_PAD_LEFT), -3 => str_pad($d['y'], 32, "\0", STR_PAD_LEFT)];
+    } else {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => $bits]);
+        $d = openssl_pkey_get_details($key)['rsa'];
+        $cose = [1 => 3, 3 => -257, -1 => $d['n'], -2 => $d['e']];
+    }
+    return ['key' => $key, 'cose' => $cose, 'id' => random_bytes(32), 'count' => 0, 'counts' => true];
+}
+
+// What navigator.credentials.create() returns: [clientDataJSON, attestationObject].
+function test_register(array $device, string $challenge, string $origin, string $rpId, int $flags = 0x45, string $type = 'webauthn.create'): array
+{
+    $client = json_encode(['type' => $type, 'challenge' => $challenge, 'origin' => $origin, 'crossOrigin' => false]);
+    $auth = hash('sha256', $rpId, true) . chr($flags) . pack('N', 0) . str_repeat("\0", 16)
+        . pack('n', strlen($device['id'])) . $device['id'] . cbor_encode($device['cose']);
+    return [$client, cbor_encode(['fmt' => new CborText('none'), 'attStmt' => [], 'authData' => $auth])];
+}
+
+// What navigator.credentials.get() returns: [clientDataJSON, authenticatorData, signature].
+function test_sign(array &$device, string $challenge, string $origin, string $rpId, int $flags = 0x05, string $type = 'webauthn.get'): array
+{
+    if ($device['counts']) {
+        $device['count']++;
+    }
+    $client = json_encode(['type' => $type, 'challenge' => $challenge, 'origin' => $origin]);
+    $auth = hash('sha256', $rpId, true) . chr($flags) . pack('N', $device['count']);
+    openssl_sign($auth . hash('sha256', $client, true), $signature, $device['key'], OPENSSL_ALGO_SHA256);
+    return [$client, $auth, $signature];
+}
+
 
 $passed = 0;
 $failed = [];
@@ -79,6 +143,71 @@ same('invitation can ask for first names', 'Sarah', greeting_name(['name' => 'Sa
 same('a typed greeting wins', 'Granny Pat', greeting_name(['name' => 'Pat Jones', 'greeting_style' => 'first', 'greeting' => 'Granny Pat']));
 [, $mailText, $mailHtml] = render_invite(['name' => 'Sarah Jones', 'greeting_style' => 'first', 'code' => 'K7MPX4QR'], mail_settings());
 check('emails use the greeting for {name}', strpos($mailText, 'Dear Sarah,') === 0 && strpos($mailHtml, 'Dear Sarah,') !== false);
+
+section('Passkeys');
+same('base64url round trip', "\x00\xff\xfe binary", b64url_decode(b64url_encode("\x00\xff\xfe binary")));
+check('base64url refuses other characters', b64url_decode('abc+/=') === null);
+$pos = 0;
+same('CBOR reads a map', [1 => 2, 'a' => "\x01\x02", -3 => [true, null]], cbor_read(cbor_encode([1 => 2, 'a' => "\x01\x02", -3 => [true, null]]), $pos));
+foreach (["\x5a\xff\xff\xff\xff" => 'a byte string longer than the data', "\x9f" => 'indefinite lengths', "\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x00" => 'very deep nesting',
+          "\x1b\xff\xff\xff\xff\xff\xff\xff\xff" => 'a huge number', "\xc0\x00" => 'tags'] as $bad => $what) {
+    $pos = 0;
+    try { cbor_read($bad, $pos); $ok = false; } catch (RuntimeException $e) { $ok = true; }
+    check("CBOR refuses $what", $ok);
+}
+$site = ['challenge' => 'Y2hhbGxlbmdlLW9uZQ', 'origin' => 'https://example.com', 'rp_id' => 'example.com'];
+$device = test_device('ec');
+[$cd, $att] = test_register($device, $site['challenge'], $site['origin'], $site['rp_id']);
+$reg = verify_passkey_registration($site, $cd, $att);
+check('a new passkey (P-256) is accepted', is_array($reg) && $reg['credential_id'] === b64url_encode($device['id']) && strpos($reg['public_key'], 'BEGIN PUBLIC KEY') !== false);
+$rsa = test_device('rsa');
+[$cd2, $att2] = test_register($rsa, $site['challenge'], $site['origin'], $site['rp_id']);
+check('a new passkey (RSA) is accepted', is_array(verify_passkey_registration($site, $cd2, $att2)));
+$refusals = [
+    'a different challenge' => test_register($device, 'c29tZXRoaW5nLWVsc2U', $site['origin'], $site['rp_id']),
+    'a look-alike site' => test_register($device, $site['challenge'], 'https://examp1e.com', $site['rp_id']),
+    'another site\'s passkey' => test_register($device, $site['challenge'], $site['origin'], 'evil.example'),
+    'no Face ID/fingerprint/PIN' => test_register($device, $site['challenge'], $site['origin'], $site['rp_id'], 0x41),
+    'a sign-in posing as a new passkey' => test_register($device, $site['challenge'], $site['origin'], $site['rp_id'], 0x45, 'webauthn.get'),
+    'a weak RSA key' => test_register(test_device('rsa', 1024), $site['challenge'], $site['origin'], $site['rp_id']),
+];
+$unsupported = $device;
+$unsupported['cose'] = [1 => 1, 3 => -8, -1 => 6, -2 => str_repeat("\1", 32)];   // Ed25519: not offered
+$refusals['an unsupported key type'] = test_register($unsupported, $site['challenge'], $site['origin'], $site['rp_id']);
+$refusals['unreadable data'] = [$cd, "\xa1\x63abc"];
+foreach ($refusals as $what => [$c, $a]) {
+    check("new passkey refused: $what", is_string(verify_passkey_registration($site, $c, $a)));
+}
+
+$stored = ['public_key' => $reg['public_key'], 'sign_count' => 0];
+[$c, $ad, $sig] = test_sign($device, $site['challenge'], $site['origin'], $site['rp_id']);
+same('passkey sign-in accepted', 1, verify_passkey_assertion($site, $stored, $c, $ad, $sig));
+$stored['sign_count'] = 1;
+check('the same sign-in can\'t be replayed', is_string(verify_passkey_assertion($site, $stored, $c, $ad, $sig)));
+[$c, $ad, $sig] = test_sign($device, $site['challenge'], $site['origin'], $site['rp_id']);
+same('the next sign-in is accepted', 2, verify_passkey_assertion($site, $stored, $c, $ad, $sig));
+$synced = test_device('ec');
+$synced['counts'] = false;   // synced passkeys (Apple, Google) always report 0
+[, $att3] = test_register($synced, $site['challenge'], $site['origin'], $site['rp_id']);
+$syncedStored = ['public_key' => verify_passkey_registration($site, test_register($synced, $site['challenge'], $site['origin'], $site['rp_id'])[0], $att3)['public_key'], 'sign_count' => 0];
+[$c, $ad, $sig] = test_sign($synced, $site['challenge'], $site['origin'], $site['rp_id']);
+same('synced passkeys that don\'t count are accepted', 0, verify_passkey_assertion($site, $syncedStored, $c, $ad, $sig));
+$stored['sign_count'] = 2;
+$attacks = [
+    'a different challenge' => test_sign($device, 'b3RoZXI', $site['origin'], $site['rp_id']),
+    'a look-alike site' => test_sign($device, $site['challenge'], 'https://examp1e.com', $site['rp_id']),
+    'another site\'s passkey' => test_sign($device, $site['challenge'], $site['origin'], 'evil.example'),
+    'no Face ID/fingerprint/PIN' => test_sign($device, $site['challenge'], $site['origin'], $site['rp_id'], 0x01),
+    'a new-passkey answer posing as a sign-in' => test_sign($device, $site['challenge'], $site['origin'], $site['rp_id'], 0x05, 'webauthn.create'),
+    'someone else\'s key' => test_sign($rsa, $site['challenge'], $site['origin'], $site['rp_id']),
+];
+[$c, $ad, $sig] = test_sign($device, $site['challenge'], $site['origin'], $site['rp_id']);
+$attacks['tampered device data'] = [$c, substr($ad, 0, 32) . chr(ord($ad[32]) | 0x40) . substr($ad, 33), $sig];
+$attacks['tampered browser data'] = [str_replace('"origin"', '"origin" ', $c), $ad, $sig];
+$attacks['a counter going backwards'] = (function () use ($device, $site) { $d = $device; $d['count'] = 0; return test_sign($d, $site['challenge'], $site['origin'], $site['rp_id']); })();
+foreach ($attacks as $what => [$c, $ad, $sig]) {
+    check("passkey sign-in refused: $what", is_string(verify_passkey_assertion($site, $stored, $c, $ad, $sig)));
+}
 
 section('Uploading a CSV');
 same('headings, two email columns, notes ignored', [['Ali & Jo Khan', 'ali@example.com, jo@example.com'], ['Uncle Bob', '']],
@@ -380,6 +509,82 @@ foreach ($argv as $arg) {
     $survivor = db()->query('SELECT id FROM guests LIMIT 1')->fetchColumn();
     check('deleting needs a CSRF token', $get('/admin.php', ['action' => 'delete_selected', 'ids' => [$survivor]])['status'] === 400
         && db()->query('SELECT COUNT(*) FROM guests WHERE id = ' . (int)$survivor)->fetchColumn());
+
+    // Passkeys, end to end with the pretend device: add one, then it's needed to sign in.
+    $origin = rtrim($base, '/');
+    $rpId = (string)parse_url($base, PHP_URL_HOST);
+    $options = function (string $purpose, string $page = '/admin.php?tab=account') use ($get, $csrf) {
+        $form = $get($page);
+        $r = $get('/admin.php?passkey_options=1', ['csrf' => $csrf($form['body']), 'purpose' => $purpose]);
+        return [json_decode($r['body'], true) ?: [], $csrf($form['body']), $r['status']];
+    };
+    [$o, $token] = $options('register');
+    check('passkey options name this site', ($o['rp']['id'] ?? '') === $rpId && ($o['authenticatorSelection']['userVerification'] ?? '') === 'required');
+    $key = test_device('ec');
+    [$cd, $att] = test_register($key, $o['challenge'], $origin, $rpId);
+    $get('/admin.php', ['csrf' => $token, 'action' => 'passkey_register', 'passkey_name' => 'Test phone',
+        'credential_id' => b64url_encode($key['id']), 'client_data' => b64url_encode($cd), 'attestation' => b64url_encode($att)]);
+    $account = $get('/admin.php?tab=account')['body'];
+    check('passkey added', strpos($account, 'need it to sign in') !== false && strpos($account, 'Test phone') !== false);
+    [$o, $token] = $options('register');
+    [$cd, $att] = test_register($key, $o['challenge'], $origin, $rpId);
+    $get('/admin.php', ['csrf' => $token, 'action' => 'passkey_register', 'passkey_name' => 'Again',
+        'credential_id' => b64url_encode($key['id']), 'client_data' => b64url_encode($cd), 'attestation' => b64url_encode($att)]);
+    check('the same passkey can\'t be added twice', strpos($get('/admin.php?tab=account')['body'], 'already been added') !== false);
+
+    $signOut = function () use ($get, $csrf) {
+        $page = $get('/admin.php?tab=account');
+        $get('/admin.php', ['csrf' => $csrf($page['body']), 'action' => 'logout']);
+    };
+    $signOut();
+    $login = $get('/admin.php');
+    $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
+    $step = $get('/admin.php?tab=guests')['body'];
+    check('with a passkey, the password alone isn\'t enough', strpos($step, 'confirm it\'s you with your passkey') !== false && strpos($step, 'Invitations (') === false);
+    [$o, $token, $status] = $options('register', '/admin.php');
+    check('half signed in can\'t add a passkey', $status === 403);
+    [$o, $token] = $options('confirm', '/admin.php');
+    check('the confirm step asks for this person\'s passkey', ($o['allowCredentials'][0]['id'] ?? '') === b64url_encode($key['id']));
+    [$c, $ad, $sig] = test_sign($key, $o['challenge'], $origin, $rpId);
+    $confirmPost = ['csrf' => $token, 'action' => 'passkey_confirm', 'credential_id' => b64url_encode($key['id']),
+        'client_data' => b64url_encode($c), 'authenticator_data' => b64url_encode($ad), 'signature' => b64url_encode($sig)];
+    $get('/admin.php', $confirmPost);
+    check('password then passkey signs in', strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') !== false);
+
+    $signOut();
+    [$o, $token] = $options('login', '/admin.php');
+    [$c, $ad, $sig] = test_sign($key, $o['challenge'], $origin, $rpId);
+    $passkeyPost = ['csrf' => $token, 'action' => 'passkey_login', 'credential_id' => b64url_encode($key['id']),
+        'client_data' => b64url_encode($c), 'authenticator_data' => b64url_encode($ad), 'signature' => b64url_encode($sig)];
+    $get('/admin.php', $passkeyPost);
+    check('a passkey on its own signs in', strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') !== false);
+
+    $signOut();
+    $page = $get('/admin.php');
+    $passkeyPost['csrf'] = $csrf($page['body']);
+    $replay = $get('/admin.php', $passkeyPost);
+    check('a captured passkey sign-in can\'t be replayed', strpos($replay['body'], 'didn&#039;t work') !== false
+        && strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') === false);
+    $impostor = test_device('ec');
+    [$o, $token] = $options('login', '/admin.php');
+    [$c, $ad, $sig] = test_sign($impostor, $o['challenge'], $origin, $rpId);
+    $get('/admin.php', ['csrf' => $token, 'action' => 'passkey_login', 'credential_id' => b64url_encode($key['id']),
+        'client_data' => b64url_encode($c), 'authenticator_data' => b64url_encode($ad), 'signature' => b64url_encode($sig)]);
+    check('a different key using this passkey\'s id is refused', strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') === false);
+
+    // Tidy up: sign back in with the passkey and remove it, so the password works alone again.
+    [$o, $token] = $options('login', '/admin.php');
+    [$c, $ad, $sig] = test_sign($key, $o['challenge'], $origin, $rpId);
+    $get('/admin.php', ['csrf' => $token, 'action' => 'passkey_login', 'credential_id' => b64url_encode($key['id']),
+        'client_data' => b64url_encode($c), 'authenticator_data' => b64url_encode($ad), 'signature' => b64url_encode($sig)]);
+    $account = $get('/admin.php?tab=account');
+    preg_match('/name="id" value="(\d+)">\s*<button class="link small danger" name="action" value="passkey_remove"/', $account['body'], $m);
+    $get('/admin.php', ['csrf' => $csrf($account['body']), 'action' => 'passkey_remove', 'id' => $m[1] ?? 0]);
+    check('removing the last passkey says the password works alone', strpos($get('/admin.php?tab=account')['body'], 'just your password') !== false);
+    $signOut();
+    $login = $get('/admin.php');
+    $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
+    check('without a passkey the password works alone again', strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') !== false);
     @unlink($jar);
 }
 

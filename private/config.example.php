@@ -25,6 +25,11 @@ const ADMIN_PASSWORD = 'change-me-please';
 // Where the SQLite database lives. private/ is kept out of the web root.
 const DB_PATH = __DIR__ . '/data/wedding.sqlite';
 
+// Passkeys: once you add one (Admin, "Your sign-in" tab), you need it to
+// sign in. If you lose it, set this to true, sign in with just the password,
+// remove the old passkey and add a new one, then set it back to false.
+// const PASSKEY_RECOVERY = true;
+
 // Wrong-code attempts allowed per IP address in a 15 minute window.
 const MAX_FAILED_ATTEMPTS = 10;
 

@@ -111,6 +111,7 @@ Emails go out through your host's mail system:
 
 - **Adding guests:** one invitation per line, as `Name; email` (email optional). One line per household (`Sarah, Tom and Lily Jones; sarah@example.com`). If a couple have an email each, add both (`Ali & Jo Khan; ali@example.com; jo@example.com`): each address gets its own copy of every email. To add a whole list at once, upload a spreadsheet saved as CSV, with the name in the first column and any email addresses in the next columns (headings like *Name*, *Email*, *Email 2* are fine, and other columns are ignored). Names already on the list are skipped, so you can upload an updated file safely. The name decides the RSVP's tick boxes: separate people with `&`, `,` or `and`, add a plus-one with `+ guest`, and use "Family" for an unknown number. The edit form shows how a name is being split.
 - **Logins:** the owner signs in as `admin` with `ADMIN_PASSWORD`, which can't be reset by email, so there's always a way in. Add others on the **People** tab: they get an emailed (or copied) one-time setup link, valid 7 days, and choose their own password. They can use every tab except People, and **Forgot password?** emails them a reset link.
+- **Passkeys:** on the **Your sign-in** tab, anyone can add a passkey (Face ID, a fingerprint, a device PIN, or a password manager). Once you have one, it's required: sign in with **Sign in with a passkey**, or with your password and then the passkey. Add one on each device you use, or use a password manager that syncs them. If another admin loses theirs, the owner's **Reset password** on the People tab also clears their passkeys. If the owner loses theirs, set `PASSKEY_RECOVERY = true` in `config.php`, sign in with just the password, remove the old passkey and add a new one, then set it back to `false`. Passkeys work on the live site over HTTPS (the address in `SITE_URL`) and on `localhost`.
 - **Content formatting:** blank line = new paragraph, `## ` = subheading, `- ` = bullet, `**bold**`, `*italic*`, `[text](https://…)` = link, and `[large]…[/large]` (also `small` and `xlarge`) = text size. The toolbar adds these for you.
 - **Greetings:** choose whether guests are greeted by their full name ("Sarah, Tom and Lily Jones") or first names only ("Sarah, Tom and Lily"), on the Guests tab. Surnames the site has found are shown in **bold** in the guest list. It understands titles ("Mr & Mrs Smith" keeps the surname), relations ("Uncle Bob" is a first name), family names, and surnames like "van der Berg" or "Ó Briain". Any invitation can override the choice, or have its own greeting typed in, from its edit form. The greeting is used for `{name}` in emails and the welcome on the guest's page.
 - **Email placeholders:** `{name}` (the guest's greeting), `{link}` and `{code}` are filled in for each guest. In emails, the link appears as a button.
@@ -121,7 +122,7 @@ Emails go out through your host's mail system:
 - **Sessions:** a new session ID and form token at sign-in. Cookies are HttpOnly, SameSite=Lax and Secure over HTTPS. Admin sessions end after 2 hours idle or 12 hours in all, and straight away if that person is removed or their password changes (including a new `ADMIN_PASSWORD` in config.php).
 - **Forms:** CSRF tokens everywhere, input read as plain text, and prepared SQL statements.
 - **Output:** HTML-escaped everywhere, a strict Content Security Policy (only the site's own scripts and styles), no framing, HSTS, Permissions-Policy and cross-origin isolation headers, and spreadsheet-formula-safe CSV exports.
-- **Passwords:** at least 12 characters, and extra admins' passwords are bcrypt-hashed. Setup and reset links are stored only as hashes and are single-use.
+- **Passwords and passkeys:** at least 12 characters, and extra admins' passwords are bcrypt-hashed. Setup and reset links are stored only as hashes and are single-use. Admins can add passkeys, which are then required (on their own, or after the password), so a stolen password alone can't get in.
 - **Files:** config, code and the database live outside the web root, with `.htaccess` blocking them if they ever end up inside it. Errors go to the server log, never the page. Pages carry `noindex`.
 - **Privacy:** no third-party analytics, fonts or trackers. Visits and insights stay in your own database.
 
@@ -184,6 +185,7 @@ private/                Never served to browsers
   notify.php            Update emails
   content.php           Guest-page sections
   users.php             Admin logins
+  passkeys.php          Passkey sign-in (WebAuthn), with no libraries
   insights.php          Insights tab
   calendar.php          Calendar file and links
   photo.php             Photo shape and edge colours

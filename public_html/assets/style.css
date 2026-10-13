@@ -857,3 +857,14 @@ body.photo-bg::after {
 .not-found .quip { margin: 18px 0 6px; font-size: 1.15rem; font-style: italic; color: var(--ink); }
 .not-found .hint { margin: 0 0 22px; color: var(--muted); }
 .not-found a.button { display: block; text-align: center; text-decoration: none; }
+
+/* Passkeys: the sign-in button under the password one, and the add form. */
+.code-box .passkey-button { margin-top: 10px; }
+.passkey-step .link { margin-top: 12px; }
+.passkey-add { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.passkey-add .error { margin: 10px 0 0; }
+.passkey-add input[type="text"] {
+  flex: 1 1 200px; padding: 9px 10px; font: 0.95rem var(--font); color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+}
+.passkey-add label { display: block; margin-bottom: 6px; }

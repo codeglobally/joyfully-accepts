@@ -25,6 +25,10 @@ $defaults = [
     'DATE_ON_HOME_PAGE' => false,
     // Footer line "Made with ♥ in …". Leave empty to hide it. The optional
     // URL turns the place name into a hidden link.
+    // Lost the owner's passkey? Set this to true in config.php to sign in with
+    // just ADMIN_PASSWORD, remove the old passkey and add a new one, then set
+    // it back to false.
+    'PASSKEY_RECOVERY' => false,
     'MADE_IN' => '',
     'MADE_IN_URL' => '',
 ];

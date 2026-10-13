@@ -7,6 +7,7 @@ require APP_DIR . '/content.php';
 require APP_DIR . '/users.php';
 require APP_DIR . '/notify.php';
 require APP_DIR . '/insights.php';
+require APP_DIR . '/passkeys.php';
 
 $error = '';
 $message = '';
@@ -102,7 +103,81 @@ if (isset($_GET['forgot'])) {
     exit;
 }
 
+// --- Passkey options (asked for by assets/passkey.js) ----------------
+
+if (isset($_GET['passkey_options']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    check_csrf();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $origin = passkey_origin();
+    $purpose = input($_POST, 'purpose');
+    $pending = pending_admin();
+    $options = null;
+    if (!$origin) {
+        http_response_code(400);
+        exit(json_encode(['error' => 'Passkeys only work on ' . SITE_URL . '.']));
+    } elseif ($purpose === 'login') {
+        $options = passkey_get_options($origin, 'login');
+    } elseif ($purpose === 'confirm' && $pending) {
+        $options = passkey_get_options($origin, 'confirm', (int)$pending['id']);
+    } elseif ($purpose === 'register' && is_admin() && admin_session_valid()) {
+        $me = current_admin();
+        $username = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') : OWNER_USERNAME;
+        $options = passkey_create_options($origin, $me, $username);
+    }
+    if ($options === null) {
+        http_response_code(403);
+        exit(json_encode(['error' => 'Please sign in again.']));
+    }
+    exit(json_encode($options));
+}
+
 // --- Login -----------------------------------------------------------
+// A password, a passkey, or both: once someone has a passkey, a correct
+// password only gets them to a "confirm with your passkey" step.
+
+$loginAction = $_SERVER['REQUEST_METHOD'] === 'POST' ? input($_POST, 'action') : '';
+if ($loginAction === 'cancel_sign_in') {
+    check_csrf();
+    unset($_SESSION['pending_admin'], $_SESSION['passkey']);
+    header('Location: /admin.php');
+    exit;
+}
+if ($loginAction === 'passkey_login' || $loginAction === 'passkey_confirm') {
+    check_csrf();
+    $purpose = $loginAction === 'passkey_login' ? 'login' : 'confirm';
+    $challenge = take_passkey_challenge($purpose);
+    $origin = passkey_origin();
+    $stored = find_passkey(input($_POST, 'credential_id'));
+    $pending = pending_admin();
+    $clientData = b64url_decode(input($_POST, 'client_data'));
+    $authData = b64url_decode(input($_POST, 'authenticator_data'));
+    $signature = b64url_decode(input($_POST, 'signature'));
+    $result = 'That passkey didn\'t work here. Please try again.';
+    if (too_many_attempts()) {
+        $result = 'Too many attempts. Please wait 15 minutes.';
+    } elseif ($challenge && $origin && $stored && $clientData !== null && $authData !== null && $signature !== null
+        && ($purpose === 'login' || ($pending && (int)$stored['user_id'] === (int)$pending['id']))) {
+        $result = verify_passkey_assertion(['challenge' => $challenge['challenge'], 'origin' => $origin[1], 'rp_id' => $origin[0]],
+            $stored, $clientData, $authData, $signature);
+    }
+    if (is_int($result)) {
+        $user = admin_by_id((int)$stored['user_id']);
+        if ($user) {
+            passkeys_db()->prepare('UPDATE passkeys SET sign_count = ?, last_used_at = CURRENT_TIMESTAMP WHERE id = ?')
+                ->execute([$result, $stored['id']]);
+            unset($_SESSION['pending_admin']);
+            sign_in($user);
+            header('Location: /admin.php');
+            exit;
+        }
+        $result = 'That passkey belongs to someone who can no longer sign in.';
+    }
+    if (!too_many_attempts()) {
+        record_failed_attempt();
+    }
+    $error = $result;
+}
 
 if (isset($_POST['login'])) {
     check_csrf();
@@ -110,6 +185,13 @@ if (isset($_POST['login'])) {
     if (too_many_attempts()) {
         $error = 'Too many attempts. Please wait 15 minutes.';
     } elseif ($user = check_login($username, input($_POST, 'password'))) {
+        if (passkey_required((int)$user['id'])) {
+            // Right password; now the passkey.
+            session_regenerate_id(true);
+            $_SESSION['pending_admin'] = ['user' => $user, 'until' => time() + PASSKEY_SECONDS];
+            header('Location: /admin.php');
+            exit;
+        }
         sign_in($user);
         header('Location: /admin.php');
         exit;
@@ -121,6 +203,27 @@ if (isset($_POST['login'])) {
     }
 }
 
+if (!is_admin() && ($pending = pending_admin())) {
+    page_header('Admin', 'centered admin');
+    ?>
+    <main class="entry">
+      <h1>Admin</h1>
+      <form method="post" class="code-box passkey-step">
+        <?= csrf_field() ?>
+        <p>Hi <?= h($pending['name']) ?>. Now confirm it's you with your passkey.</p>
+        <button type="button" data-passkey="confirm" hidden>Use my passkey</button>
+        <p class="error" data-passkey-unsupported hidden>This browser can't use passkeys. Try the browser or device where you added it.</p>
+        <p class="error" role="alert" data-passkey-message <?= $error ? '' : 'hidden' ?>><?= h($error) ?></p>
+        <button type="submit" class="link" name="action" value="cancel_sign_in">Sign in as someone else</button>
+      </form>
+      <p class="site-footer"><a href="/">&larr; Back to site</a></p>
+    </main>
+    <script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script>
+    <?php
+    page_footer();
+    exit;
+}
+
 if (!is_admin()) {
     page_header('Admin', 'centered admin');
     ?>
@@ -129,16 +232,18 @@ if (!is_admin()) {
       <form method="post" class="code-box">
         <?= csrf_field() ?>
         <label for="username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none"
+        <input id="username" name="username" type="text" autocomplete="username webauthn" autocapitalize="none"
                spellcheck="false" required autofocus value="<?= h(input($_POST, 'username')) ?>">
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
-        <?php if ($error): ?><p class="error" role="alert"><?= h($error) ?></p><?php endif; ?>
+        <p class="error" role="alert" data-passkey-message <?= $error ? '' : 'hidden' ?>><?= h($error) ?></p>
         <button type="submit" name="login" value="1">Sign in</button>
+        <button type="button" class="secondary passkey-button" data-passkey="login" hidden>Sign in with a passkey</button>
         <p class="forgot"><a href="/admin.php?forgot=1">Forgot password?</a></p>
       </form>
       <p class="site-footer"><a href="/">&larr; Back to site</a></p>
     </main>
+    <script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script>
     <?php
     page_footer();
     exit;
@@ -158,6 +263,7 @@ $me = current_admin();
 $unreadFeedback = (int)db()->query('SELECT COUNT(*) FROM feedback WHERE read_at IS NULL')->fetchColumn();
 $tabs = ['guests' => 'Guests', 'insights' => 'Insights', 'email' => 'Invitation email', 'updates' => 'Updates', 'content' => 'Content',
     'feedback' => 'Feedback' . ($unreadFeedback ? " ($unreadFeedback)" : '')];
+$tabs['account'] = 'Your sign-in';
 if (is_owner()) {
     $tabs['people'] = 'People';
 }
@@ -511,6 +617,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Deleted "' . $s['title'] . '".';
         }
 
+    // --- Your passkeys ---
+    } elseif ($action === 'passkey_register') {
+        $back = 'account';
+        $challenge = take_passkey_challenge('register');
+        $origin = passkey_origin();
+        $clientData = b64url_decode(input($_POST, 'client_data'));
+        $attestation = b64url_decode(input($_POST, 'attestation'));
+        $result = 'That didn\'t work. Please try again.';
+        if ($challenge && $origin && (int)$challenge['user'] === (int)$me['id'] && $clientData !== null && $attestation !== null) {
+            $result = verify_passkey_registration(['challenge' => $challenge['challenge'], 'origin' => $origin[1], 'rp_id' => $origin[0]],
+                $clientData, $attestation);
+        }
+        if (is_array($result) && find_passkey($result['credential_id'])) {
+            $message = 'That passkey has already been added.';
+        } elseif (is_array($result)) {
+            preg_match('/^.{0,60}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'passkey_name'))), $m);
+            $first = !user_passkeys((int)$me['id']);
+            passkeys_db()->prepare('INSERT INTO passkeys (user_id, credential_id, public_key, sign_count, name) VALUES (?, ?, ?, ?, ?)')
+                ->execute([(int)$me['id'], $result['credential_id'], $result['public_key'], $result['count'], trim($m[0] ?? '') ?: 'Passkey']);
+            $message = 'Passkey added.' . ($first ? ' From now on you\'ll need it to sign in, on its own or after your password.' : '');
+        } else {
+            $message = $result;
+        }
+    } elseif ($action === 'passkey_remove') {
+        $back = 'account';
+        passkeys_db()->prepare('DELETE FROM passkeys WHERE id = ? AND user_id = ?')->execute([(int)input($_POST, 'id'), (int)$me['id']]);
+        $message = user_passkeys((int)$me['id'])
+            ? 'Passkey removed.'
+            : 'Passkey removed. You can now sign in with just your password, so consider adding another.';
+
     // --- People (owner only) ---
     } elseif (in_array($action, ['user_add', 'user_reset', 'user_remove', 'user_update'], true)) {
         $back = 'people';
@@ -554,8 +690,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Saved changes to $name.";
                 }
             } elseif ($u && $action === 'user_reset') {
-                // Their old password stops working until they use the new link.
+                // Their old password stops working until they use the new link, and
+                // their passkeys are cleared (this is how someone recovers a lost one).
                 users_db()->prepare('UPDATE users SET password_hash = NULL WHERE id = ?')->execute([$u['id']]);
+                passkeys_db()->prepare('DELETE FROM passkeys WHERE user_id = ?')->execute([$u['id']]);
                 $url = new_setup_link((int)$u['id']);
                 $emailed = $emailIt && send_setup_email($u, $url, true);
                 $_SESSION['setup_link'] = ['name' => $u['name'], 'url' => $url, 'emailed' => $emailed ? $u['email'] : ''];
@@ -565,6 +703,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       . ($emailIt ? ' The email could not be sent, so send them the link yourself.' : '');
             } elseif ($u) {
                 users_db()->prepare('DELETE FROM users WHERE id = ?')->execute([$u['id']]);
+                passkeys_db()->prepare('DELETE FROM passkeys WHERE user_id = ?')->execute([$u['id']]);
                 $message = "Removed {$u['name']}. They can no longer sign in.";
             }
         }
@@ -1367,7 +1506,8 @@ page_header('Admin', 'admin');
             <td><?= h($u['name']) ?></td>
             <td><code><?= h($u['username']) ?></code></td>
             <td class="email-cell"><?= $u['email'] ? h($u['email']) : '—' ?></td>
-            <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span></td>
+            <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span>
+              <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= $keys ?> passkey<?= $keys === 1 ? '' : 's' ?></span><?php endif; ?></td>
             <td><?= $u['last_login'] ? h(date('j M, H:i', strtotime($u['last_login'] . ' UTC'))) : '—' ?></td>
             <td class="row-actions">
               <a class="link small" href="/admin.php?tab=people&amp;edit_user=<?= (int)$u['id'] ?>#edit-user">Edit</a>
@@ -1377,7 +1517,7 @@ page_header('Admin', 'admin');
                 <button class="link small" name="action" value="user_reset">Email <?= $pending ? 'setup' : 'reset' ?> link</button>
               </form>
               <?php endif; ?>
-              <form method="post" class="inline" data-confirm="Create a new setup link for <?= h($u['name']) ?>? Their current password will stop working.">
+              <form method="post" class="inline" data-confirm="Create a new setup link for <?= h($u['name']) ?>? Their current password<?= user_passkeys((int)$u['id']) ? ' and passkeys' : '' ?> will stop working.">
                 <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                 <button class="link small" name="action" value="user_reset"><?= $pending ? 'New setup link' : 'Reset password' ?></button>
               </form>
@@ -1408,7 +1548,60 @@ page_header('Admin', 'admin');
     </form>
   </section>
 
+<?php elseif ($tab === 'account'): $mine = user_passkeys((int)$me['id']); $origin = passkey_origin(); ?>
+
+  <section class="card">
+    <h2>Passkeys</h2>
+    <p class="hint">A passkey lets you sign in with Face ID, a fingerprint or your device's PIN instead of typing your
+      password, and it can't be stolen by a fake site. Once you've added one, <strong>you'll need it every time you sign in</strong>:
+      on its own, or after your password. Add one on each device you use, or use a password manager that syncs them.</p>
+    <?php if (is_owner() && PASSKEY_RECOVERY): ?>
+      <p class="notice" role="status">PASSKEY_RECOVERY is on in config.php, so the owner can sign in with just the password.
+        Once you've added a new passkey, set it back to <code>false</code>.</p>
+    <?php endif; ?>
+    <?php if ($mine): ?>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Passkey</th><th>Added</th><th>Last used</th><th></th></tr></thead>
+          <tbody>
+          <?php foreach ($mine as $p): ?>
+            <tr>
+              <td><?= h($p['name']) ?></td>
+              <td><?= h(date('j M Y', strtotime($p['created_at'] . ' UTC'))) ?></td>
+              <td><?= $p['last_used_at'] ? h(date('j M, H:i', strtotime($p['last_used_at'] . ' UTC'))) : '—' ?></td>
+              <td>
+                <form method="post" class="inline" data-confirm="Remove the passkey &quot;<?= h($p['name']) ?>&quot;?<?= count($mine) === 1 ? ' It\'s your only one, so you\'ll be able to sign in with just your password again.' : '' ?>">
+                  <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                  <button class="link small danger" name="action" value="passkey_remove">Remove</button>
+                </form>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php else: ?>
+      <p>You don't have a passkey yet, so you sign in with your password only.</p>
+    <?php endif; ?>
+
+    <?php if (!$origin): ?>
+      <p class="hint">Passkeys can only be added on the live site, <?= h(SITE_URL) ?>.</p>
+    <?php else: ?>
+      <form method="post" class="passkey-add">
+        <?= csrf_field() ?>
+        <label for="passkey-name">Name it, so you can tell your passkeys apart</label>
+        <div class="csv-row">
+          <input id="passkey-name" name="passkey_name" type="text" maxlength="60" value="<?= $mine ? '' : 'My phone' ?>" placeholder="e.g. Work laptop">
+          <button type="button" data-passkey="register" hidden>Add a passkey</button>
+        </div>
+        <p class="error" data-passkey-unsupported hidden>This browser can't create passkeys. Try Safari, Chrome, Edge or Firefox on an up-to-date device.</p>
+        <p class="error" role="alert" data-passkey-message hidden></p>
+      </form>
+    <?php endif; ?>
+  </section>
+
 <?php endif; ?>
 </main>
+<?php if ($tab === 'account'): ?><script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script><?php endif; ?>
 <script src="<?= h(asset_url('/assets/admin.js')) ?>"></script>
 <?php page_footer();

@@ -18,7 +18,7 @@ WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php tests/r
 ## How it fits together
 
 - `public_html/` is the web root: one PHP file per page, plus `assets/`. Each page requires `private/lib.php`.
-- `private/` is never served. `lib.php` loads settings in this order: `config.php` (or the file in `WEDDING_CONFIG`), then `site.php` (look and feel, only when `WEDDING_CONFIG` isn't set), then `defaults.php`, which fills in anything left out. Feature code lives in `content.php`, `mailer.php`, `notify.php`, `users.php`, `insights.php`, `calendar.php` and `photo.php`.
+- `private/` is never served. `lib.php` loads settings in this order: `config.php` (or the file in `WEDDING_CONFIG`), then `site.php` (look and feel, only when `WEDDING_CONFIG` isn't set), then `defaults.php`, which fills in anything left out. Feature code lives in `content.php`, `mailer.php`, `notify.php`, `users.php`, `passkeys.php`, `insights.php`, `calendar.php` and `photo.php`. `passkeys.php` is security-critical: any change needs tests that forged, replayed and wrong-site sign-ins still fail (the pretend device in `tests/run.php` makes them).
 - `theme.css.php` turns the photo and settings into CSS variables. `style.css` holds everything else.
 - Tests are one plain script, `tests/run.php`, with `check()` and `section()` helpers and an end-to-end block run with `--http=`. Its settings are in `tests/config.php`.
 - CI (`.github/workflows/`) runs the tests on PHP 7.4, 8.1, 8.3 and 8.4, plus Psalm taint analysis (`psalm.xml`) and an OWASP ZAP scan (`.zap/rules.tsv`).

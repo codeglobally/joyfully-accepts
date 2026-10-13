@@ -84,6 +84,35 @@ function sign_in(array $user): void
     $_SESSION['admin_key'] = admin_session_key((int)$user['id']);
 }
 
+// Someone who has given the right password but still needs to confirm with
+// their passkey (for a few minutes), or null.
+function pending_admin(): ?array
+{
+    $p = $_SESSION['pending_admin'] ?? null;
+    if (!is_array($p) || ($p['until'] ?? 0) < time() || !is_array($p['user'] ?? null)) {
+        unset($_SESSION['pending_admin']);
+        return null;
+    }
+    return $p['user'];
+}
+
+// The person a passkey belongs to, ready for sign_in(), or null if they can
+// no longer sign in (removed, or waiting to choose a new password).
+function admin_by_id(int $id): ?array
+{
+    if ($id === 0) {
+        return ['id' => 0, 'name' => 'Admin', 'owner' => true];
+    }
+    $q = users_db()->prepare('SELECT * FROM users WHERE id = ? AND password_hash IS NOT NULL');
+    $q->execute([$id]);
+    $user = $q->fetch();
+    if (!$user) {
+        return null;
+    }
+    users_db()->prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')->execute([$id]);
+    return ['id' => (int)$user['id'], 'name' => $user['name'], 'owner' => false];
+}
+
 // The signed-in person: ['id' => …, 'name' => …, 'owner' => bool]. A session
 // without one counts as nobody, never as the owner.
 function current_admin(): array
