@@ -814,18 +814,46 @@ foreach ($guests as $g) {
 
 page_header('Admin', 'admin');
 ?>
+<?php
+$myPasskeys = count(user_passkeys((int)$me['id']));
+$myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') : OWNER_USERNAME;
+?>
 <header class="top wide">
   <span class="brand">Admin <span class="version">v<?= h(SITE_VERSION) ?></span></span>
   <nav class="top-links">
-    <span class="signed-in">Signed in as <?= h($me['name']) ?></span>
     <a class="link" href="/">View site</a>
-    <form method="post"><?= csrf_field() ?><button class="link" name="action" value="logout">Sign out</button></form>
+    <?php /* Account menu: a <details> so it works by keyboard and without JavaScript. */ ?>
+    <details class="account-menu">
+      <summary aria-label="Account: <?= h($me['name']) ?><?= $myPasskeys ? '' : ' (no passkey yet)' ?>">
+        <span class="avatar" aria-hidden="true"><?= h(initials($me['name'])) ?></span>
+        <?php if (!$myPasskeys): ?><span class="avatar-dot" aria-hidden="true"></span><?php endif; ?>
+      </summary>
+      <div class="account-panel">
+        <div class="account-who">
+          <span class="avatar large" aria-hidden="true"><?= h(initials($me['name'])) ?></span>
+          <div>
+            <strong><?= h($me['name']) ?></strong>
+            <span><?= is_owner() ? 'Owner' : 'Admin' ?> · <?= h($myUsername) ?></span>
+          </div>
+        </div>
+        <a class="account-item" href="/admin.php?tab=account" <?= $tab === 'account' ? 'aria-current="page"' : '' ?>>
+          <span>Sign-in and passkeys</span>
+          <small class="<?= $myPasskeys ? '' : 'nudge' ?>"><?= $myPasskeys
+              ? $myPasskeys . ' passkey' . ($myPasskeys === 1 ? '' : 's')
+              : 'No passkey yet: add one' ?></small>
+        </a>
+        <form method="post" class="account-signout">
+          <?= csrf_field() ?>
+          <button class="account-item" name="action" value="logout">Sign out</button>
+        </form>
+      </div>
+    </details>
   </nav>
 </header>
 
 <main class="content wide">
   <nav class="tabs" aria-label="Admin sections">
-    <?php foreach ($tabs as $key => $label): ?>
+    <?php foreach ($tabs as $key => $label): if ($key === 'account') continue;   // in the account menu instead ?>
       <a href="/admin.php?tab=<?= $key ?>" <?= $key === $tab ? 'aria-current="page"' : '' ?>><?= h($label) ?></a>
     <?php endforeach; ?>
   </nav>
@@ -1550,6 +1578,7 @@ page_header('Admin', 'admin');
 
 <?php elseif ($tab === 'account'): $mine = user_passkeys((int)$me['id']); $origin = passkey_origin(); ?>
 
+  <h2 class="page-title">Your sign-in</h2>
   <section class="card">
     <h2>Passkeys</h2>
     <p class="hint">A passkey lets you sign in with Face ID, a fingerprint or your device's PIN instead of typing your

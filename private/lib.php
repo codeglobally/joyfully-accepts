@@ -356,6 +356,20 @@ function name_html(string $name): string
     return $html;
 }
 
+// Up to two initials for an avatar: "Sam Jones" -> "SJ", "Admin" -> "A".
+function initials(string $name): string
+{
+    $letters = [];
+    foreach (preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) as $word) {
+        if (preg_match('/\p{L}/u', $word, $m)) {
+            $letters[] = $m[0];   // first letter of each word ("O'Neil" -> O; "&" is skipped)
+        }
+    }
+    $letters = $letters ?: ['?'];
+    $pick = count($letters) > 1 ? $letters[0] . end($letters) : $letters[0];
+    return function_exists('mb_strtoupper') ? mb_strtoupper($pick) : strtoupper($pick);
+}
+
 // The site-wide choice: 'full' (the default) or 'first'.
 function site_greeting_style(): string
 {

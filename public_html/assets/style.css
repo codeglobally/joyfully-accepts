@@ -868,3 +868,41 @@ body.photo-bg::after {
   background: var(--card); border: 1px solid var(--line); border-radius: 8px;
 }
 .passkey-add label { display: block; margin-bottom: 6px; }
+
+/* Account menu (top right of admin): avatar, then a panel with who's signed in,
+   their sign-in settings and Sign out. */
+.account-menu { position: relative; }
+.account-menu summary { list-style: none; cursor: pointer; position: relative; display: flex; border-radius: 50%; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); font: 600 0.85rem var(--font); letter-spacing: 0.03em;
+}
+.avatar.large { width: 44px; height: 44px; font-size: 1rem; }
+.account-menu[open] summary .avatar { box-shadow: 0 0 0 3px var(--line); }
+.avatar-dot {
+  position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--error); border: 2px solid var(--bg);
+}
+.account-panel {
+  position: absolute; right: 0; top: calc(100% + 10px); z-index: 30;
+  width: 280px; max-width: calc(100vw - 32px); padding: 6px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+.account-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.account-who strong { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.account-who div span { font-size: 0.8rem; color: var(--muted); }
+.account-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: 9px 10px; border: 0; border-radius: 8px; background: none;
+  color: var(--ink); font: 0.95rem var(--font); text-align: left; text-decoration: none; cursor: pointer;
+}
+.account-item:hover, .account-item:focus-visible { background: var(--bg); filter: none; }
+.account-item[aria-current="page"] span { font-weight: 600; }
+.account-item small { font-size: 0.8rem; color: var(--muted); }
+.account-item small.nudge { color: var(--error); }
+.account-signout { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid var(--line); }
+.page-title { margin: 0 0 12px; font-weight: 400; }

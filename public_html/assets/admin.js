@@ -1,3 +1,16 @@
+// Account menu (top right): close it with Escape or by clicking elsewhere.
+document.querySelectorAll('details.account-menu').forEach(function (menu) {
+  document.addEventListener('click', function (e) {
+    if (menu.open && !menu.contains(e.target)) menu.open = false;
+  });
+  menu.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && menu.open) {
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    }
+  });
+});
+
 document.querySelectorAll('[data-copy]').forEach(function (btn) {
   btn.addEventListener('click', function () {
     navigator.clipboard.writeText(btn.dataset.copy).then(function () {

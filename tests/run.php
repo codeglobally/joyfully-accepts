@@ -140,6 +140,7 @@ same('no bold without a surname', 'Uncle Bob', name_html('Uncle Bob'));
 check('names are escaped', strpos(name_html('<b>Bob</b> Jones'), '<b>') === false);
 same('greeting follows the site choice', 'Sarah Jones', greeting_name(['name' => 'Sarah Jones']));
 same('invitation can ask for first names', 'Sarah', greeting_name(['name' => 'Sarah Jones', 'greeting_style' => 'first']));
+same('avatar initials', ['SJ', 'A', 'ÉO', '?'], [initials('Sam Jones'), initials('Admin'), initials('élodie o\'neil'), initials('123')]);
 same('a typed greeting wins', 'Granny Pat', greeting_name(['name' => 'Pat Jones', 'greeting_style' => 'first', 'greeting' => 'Granny Pat']));
 [, $mailText, $mailHtml] = render_invite(['name' => 'Sarah Jones', 'greeting_style' => 'first', 'code' => 'K7MPX4QR'], mail_settings());
 check('emails use the greeting for {name}', strpos($mailText, 'Dear Sarah,') === 0 && strpos($mailHtml, 'Dear Sarah,') !== false);
@@ -417,7 +418,7 @@ foreach ($argv as $arg) {
     set_password($joId, 'jo-first-long-password');
     $joLogin = $as2('/admin.php');
     $as2('/admin.php', ['csrf' => $csrf($joLogin['body']), 'username' => 'jo', 'password' => 'jo-first-long-password', 'login' => '1']);
-    check('another admin can sign in', strpos($as2('/admin.php?tab=guests')['body'], 'Signed in as Jo') !== false);
+    check('another admin can sign in', strpos($as2('/admin.php?tab=guests')['body'], 'aria-label="Account: Jo (no passkey yet)"') !== false);
     set_password($joId, 'jo-second-long-password');
     check('changing their password signs out old sessions', $as2('/admin.php?tab=guests')['status'] === 302
         && strpos($as2('/admin.php')['body'], 'name="password"') !== false);
