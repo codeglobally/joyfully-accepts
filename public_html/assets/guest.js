@@ -249,8 +249,9 @@
 
   document.querySelectorAll('.card.collapsible').forEach(function (card) {
     var key = card.dataset.key;
-    // A message or error after replying always shows, even if RSVP was closed.
-    var forceOpen = card.querySelector('.notice, .error');
+    // Always open: RSVP until they've replied (data-open), and any card with a
+    // message or error after replying, even if they'd closed it before.
+    var forceOpen = card.dataset.open === '1' || card.querySelector('.notice, .error');
     set(card, forceOpen || collapsed.indexOf(key) === -1);
     card.querySelector('.card-toggle').addEventListener('click', function () {
       var open = this.getAttribute('aria-expanded') !== 'true';

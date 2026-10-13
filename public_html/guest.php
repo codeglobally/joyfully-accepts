@@ -129,7 +129,7 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg guest-page' : 'guest-page');
     <?php endif; ?>
   </section>
 
-  <section class="card collapsible" id="rsvp" data-key="rsvp">
+  <section class="card collapsible" id="rsvp" data-key="rsvp"<?= $status === 'waiting' ? ' data-open="1"' : '' ?>>
     <?= card_heading('RSVP', 'rsvp') ?>
     <div class="card-body" id="rsvp-body">
     <?php if ($saved && isset($savedMessages[$status])): ?>
