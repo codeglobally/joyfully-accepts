@@ -83,6 +83,37 @@ document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
   update();
 })();
 
+// Collapsible cards (e.g. "Add invitations"): the double chevron in the
+// heading opens and closes the card, remembered in this browser. Same as the
+// guest page's cards, with its own list.
+(function () {
+  var STORE = 'admin-collapsed-cards';
+  var collapsed = [];
+  try { collapsed = JSON.parse(localStorage.getItem(STORE) || '[]') || []; } catch (e) { collapsed = []; }
+
+  function set(card, open) {
+    var btn = card.querySelector('.card-toggle');
+    var body = card.querySelector('.card-body');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('title', open ? 'Collapse' : 'Expand');
+    body.hidden = !open;
+    card.classList.toggle('is-collapsed', !open);
+  }
+
+  document.querySelectorAll('.card.collapsible').forEach(function (card) {
+    var key = card.dataset.key;
+    if (!card.querySelector('.card-toggle') || !card.querySelector('.card-body')) return;
+    set(card, collapsed.indexOf(key) === -1);
+    card.querySelector('.card-toggle').addEventListener('click', function () {
+      var open = this.getAttribute('aria-expanded') !== 'true';
+      set(card, open);
+      collapsed = collapsed.filter(function (k) { return k !== key; });
+      if (!open) collapsed.push(key);
+      try { localStorage.setItem(STORE, JSON.stringify(collapsed)); } catch (e) { /* private mode etc. */ }
+    });
+  });
+})();
+
 // Formatting toolbar for the section editor: wraps or prefixes the selected
 // text in the textarea with the simple Markdown the guest page understands.
 document.querySelectorAll('[data-md]').forEach(function (btn) {

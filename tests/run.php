@@ -434,6 +434,8 @@ foreach ($argv as $arg) {
 
     // Greetings: switch the site to first names, then give one invitation its own greeting.
     $form = $get('/admin.php?tab=guests');
+    check('Add invitations can be collapsed', (bool)preg_match('#data-key="add-invitations">\s*<h2 class="card-heading"><button type="button" class="card-toggle" aria-expanded="true" aria-controls="add-invitations-body">#', $form['body'])
+        && strpos($form['body'], 'id="add-invitations-body"') !== false);
     check('surnames shown in bold', strpos($form['body'], 'Sarah &amp; Tom <strong class="surname">Jones</strong>') !== false);
     $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'greeting_style', 'style' => 'first']);
     check('guest page greets by first names', strpos($get('/guest.php')['body'], '<h1>Sarah &amp; Tom</h1>') !== false);

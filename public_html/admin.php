@@ -897,26 +897,28 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     <?php endif; ?>
   </section>
 
-  <section class="card">
-    <h2>Add invitations</h2>
-    <form method="post">
-      <?= csrf_field() ?>
-      <label for="guests">One per line: <em>Name; email</em>. Email is optional, and a couple can have one each
-        (<em>Name; email; email</em>). Each line gets its own code.</label>
-      <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Ali &amp; Jo Khan; ali@example.com; jo@example.com&#10;Uncle Bob"></textarea>
-      <button type="submit" name="action" value="add">Add</button>
-    </form>
-    <form method="post" enctype="multipart/form-data" class="csv-upload">
-      <?= csrf_field() ?>
-      <label for="csv">Or upload a spreadsheet saved as CSV</label>
-      <p class="hint" id="csv-hint">One invitation per row: the name in the first column, then any email addresses in the
-        next columns. Headings like <em>Name</em>, <em>Email</em> and <em>Email 2</em> are fine, and other columns are ignored.
-        Names already on the list are skipped, so it's safe to upload an updated file.</p>
-      <div class="csv-row">
-        <input id="csv" type="file" name="csv" accept=".csv,text/csv" required aria-describedby="csv-hint">
-        <button type="submit" name="action" value="upload_csv">Upload</button>
-      </div>
-    </form>
+  <section class="card collapsible" data-key="add-invitations">
+    <?= card_heading('Add invitations', 'add-invitations') ?>
+    <div class="card-body" id="add-invitations-body">
+      <form method="post">
+        <?= csrf_field() ?>
+        <label for="guests">One per line: <em>Name; email</em>. Email is optional, and a couple can have one each
+          (<em>Name; email; email</em>). Each line gets its own code.</label>
+        <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Ali &amp; Jo Khan; ali@example.com; jo@example.com&#10;Uncle Bob"></textarea>
+        <button type="submit" name="action" value="add">Add</button>
+      </form>
+      <form method="post" enctype="multipart/form-data" class="csv-upload">
+        <?= csrf_field() ?>
+        <label for="csv">Or upload a spreadsheet saved as CSV</label>
+        <p class="hint" id="csv-hint">One invitation per row: the name in the first column, then any email addresses in the
+          next columns. Headings like <em>Name</em>, <em>Email</em> and <em>Email 2</em> are fine, and other columns are ignored.
+          Names already on the list are skipped, so it's safe to upload an updated file.</p>
+        <div class="csv-row">
+          <input id="csv" type="file" name="csv" accept=".csv,text/csv" required aria-describedby="csv-hint">
+          <button type="submit" name="action" value="upload_csv">Upload</button>
+        </div>
+      </form>
+    </div>
   </section>
 
   <section class="card">
