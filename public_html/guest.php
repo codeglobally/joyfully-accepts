@@ -129,7 +129,12 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg guest-page' : 'guest-page');
     <?php endif; ?>
   </section>
 
-  <section class="card collapsible" id="rsvp" data-key="rsvp"<?= $status === 'waiting' ? ' data-open="1"' : '' ?>>
+  <?php
+  // Nudge guests who haven't replied, or said "not sure yet": RSVP is always
+  // open for them, and it gives a little wiggle (not straight after they save).
+  $undecided = in_array($status, ['waiting', 'maybe'], true);
+  ?>
+  <section class="card collapsible<?= $undecided && !$saved ? ' nudge' : '' ?>" id="rsvp" data-key="rsvp"<?= $undecided ? ' data-open="1"' : '' ?>>
     <?= card_heading('RSVP', 'rsvp') ?>
     <div class="card-body" id="rsvp-body">
     <?php if ($saved && isset($savedMessages[$status])): ?>
