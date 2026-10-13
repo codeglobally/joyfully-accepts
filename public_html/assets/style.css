@@ -316,6 +316,16 @@ td.dietary-cell { white-space: normal; min-width: 130px; max-width: 280px; }
 /* Let long names and email addresses wrap rather than widen the table. */
 td.name-cell { white-space: normal; min-width: 110px; max-width: 220px; }
 td.email-cell { white-space: normal; overflow-wrap: anywhere; min-width: 150px; max-width: 260px; }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 4px 0 8px; }
+.bulk-bar .hint { margin: 0; }
+button.bulk-delete {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 0.85rem;
+  background: none; color: var(--error); border: 1px solid currentColor;
+}
+button.bulk-delete:disabled { color: var(--muted); }
+th.select-cell, td.select-cell { width: 1%; padding-right: 0; }
+.select-cell input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+tr.selected td { background: var(--bg); }
 .email-address { display: block; }              /* one address per line when there are several */
 .edit-email { flex: 1 1 100%; margin: -4px 0 0; }
 /* Upload a CSV, under the "Add invitations" box. */

@@ -42,7 +42,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 - Works well on phones, tablets and desktops.
 
 **For you (admin)**
-- **Guests:** add invitations in bulk (`Name; email` per line) or by uploading a spreadsheet saved as CSV, edit, delete, copy links, and download a CSV. A couple can have an email address each, and both get the invitation and updates. Summary counts, plus a dietary requirements donut chart.
+- **Guests:** add invitations in bulk (`Name; email` per line) or by uploading a spreadsheet saved as CSV, edit, delete (one at a time, or tick several and delete them together), copy links, and download a CSV. A couple can have an email address each, and both get the invitation and updates. Summary counts, plus a dietary requirements donut chart.
 - **Insights:** RSVP funnel (invited → emailed → visited → replied), who to nudge, headcount range, caterer-ready dietary list with allergies flagged (CSV), and replies over time.
 - **Invitation email:** styled HTML email with your photo, preview, test send, and send to everyone not yet emailed.
 - **Updates:** email news to everyone or a group (coming, not replied…), with templates, one-click unsubscribe and a history.

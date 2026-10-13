@@ -264,6 +264,20 @@ foreach ($argv as $arg) {
     check('invitation sent to each address', substr_count($log, '==== ') === 2 && strpos($log, '<ali@example.com>') !== false && strpos($log, '<jo@example.com>') !== false);
     check('sending marks the invitation as emailed', db()->query("SELECT invited_at FROM guests WHERE id = " . (int)$khan)->fetchColumn() !== null);
     @unlink($mailLog);
+
+    // Tick several invitations and delete them together.
+    $form = $get('/admin.php?tab=guests');
+    check('each invitation has a tick box', substr_count($form['body'], 'name="ids[]"') === (int)db()->query('SELECT COUNT(*) FROM guests')->fetchColumn());
+    $ken = db()->query("SELECT id FROM guests WHERE name = 'Uncle Ken'")->fetchColumn();
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected', 'ids' => [$khan, $ken]]);
+    check('ticked invitations deleted together', strpos($get('/admin.php?tab=guests')['body'], 'Deleted 2 invitations.') !== false
+        && !db()->query("SELECT COUNT(*) FROM guests WHERE id IN (" . (int)$khan . ', ' . (int)$ken . ')')->fetchColumn());
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected']);
+    check('nothing ticked, nothing deleted', strpos($get('/admin.php?tab=guests')['body'], 'Tick the invitations you want to delete first.') !== false);
+    $survivor = db()->query('SELECT id FROM guests LIMIT 1')->fetchColumn();
+    check('deleting needs a CSRF token', $get('/admin.php', ['action' => 'delete_selected', 'ids' => [$survivor]])['status'] === 400
+        && db()->query('SELECT COUNT(*) FROM guests WHERE id = ' . (int)$survivor)->fetchColumn());
     @unlink($jar);
 }
 

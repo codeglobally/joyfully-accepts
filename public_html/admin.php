@@ -223,6 +223,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'delete') {
         db()->prepare('DELETE FROM guests WHERE id = ?')->execute([(int)input($_POST, 'id')]);
         $message = 'Invitation deleted.';
+    } elseif ($action === 'delete_selected') {
+        // The ticked rows in the guest table (ids[] from the checkboxes).
+        $ids = is_array($_POST['ids'] ?? null) ? $_POST['ids'] : [];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        if (!$ids) {
+            $message = 'Tick the invitations you want to delete first.';
+        } else {
+            $q = db()->prepare('DELETE FROM guests WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
+            $q->execute($ids);
+            $deleted = $q->rowCount();
+            $message = 'Deleted ' . $deleted . ' ' . ($deleted === 1 ? 'invitation' : 'invitations') . '.';
+        }
     } elseif (in_array($action, ['save_email', 'preview', 'send_test', 'send_all'], true)) {
         $back = 'email';
         // The email form's buttons all save the template first.
@@ -711,15 +723,29 @@ page_header('Admin', 'admin');
         <a class="link" href="/admin.php?tab=guests#guest-<?= (int)$g['id'] ?>">Cancel</a>
       </form>
     <?php endforeach; ?>
+    <?php if ($guests): ?>
+    <form method="post" id="bulk" class="bulk-bar" data-confirm="Delete the ticked invitations? This can't be undone.">
+      <?= csrf_field() ?>
+      <span id="bulk-count" class="hint" aria-live="polite">Tick invitations to delete several at once.</span>
+      <button type="submit" class="bulk-delete" name="action" value="delete_selected">
+        <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>
+        </svg>
+        Delete selected
+      </button>
+    </form>
+    <?php endif; ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Emailed</th><th>Reply</th><th>Dietary</th><th title="Whether they want update emails">Updates</th><th></th></tr></thead>
+        <thead><tr><th class="select-cell"><input type="checkbox" id="select-all" aria-label="Select all invitations" hidden></th><th>Name</th><th>Email</th><th>Code</th><th>Emailed</th><th>Reply</th><th>Dietary</th><th title="Whether they want update emails">Updates</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($guests as $g):
             $status = rsvp_status($g);
             $who = attendees($g);
             $invited = count(party_members($g['name'])); ?>
           <tr id="guest-<?= (int)$g['id'] ?>" <?= $g['id'] == $editId ? 'class="editing"' : '' ?>>
+            <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="Select <?= h($g['name']) ?>"></td>
             <td class="name-cell"><?= h($g['name']) ?></td>
             <td class="email-cell">
               <?php foreach (email_list($g['email']) as $address): ?>

@@ -19,6 +19,36 @@ document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
   });
 });
 
+// Ticking invitations in the guest table for "Delete selected". The
+// checkboxes belong to the form above the table (form="bulk"), so they work
+// without this script too; this adds "select all", a count, and a clearer
+// confirmation.
+(function () {
+  var form = document.getElementById('bulk');
+  if (!form) return;
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input[name="ids[]"][form="bulk"]'));
+  var all = document.getElementById('select-all');
+  var count = document.getElementById('bulk-count');
+  var button = form.querySelector('button[value="delete_selected"]');
+
+  function update() {
+    var n = boxes.filter(function (b) { return b.checked; }).length;
+    count.textContent = n ? n + ' selected' : 'Tick invitations to delete several at once.';
+    button.disabled = n === 0;
+    form.dataset.confirm = 'Delete ' + (n === 1 ? 'this invitation' : 'these ' + n + ' invitations') + "? This can't be undone.";
+    all.checked = n > 0 && n === boxes.length;
+    all.indeterminate = n > 0 && n < boxes.length;
+    boxes.forEach(function (b) { b.closest('tr').classList.toggle('selected', b.checked); });
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', update); });
+  all.hidden = false;
+  all.addEventListener('change', function () {
+    boxes.forEach(function (b) { b.checked = all.checked; });
+    update();
+  });
+  update();
+})();
+
 // Formatting toolbar for the section editor: wraps or prefixes the selected
 // text in the textarea with the simple Markdown the guest page understands.
 document.querySelectorAll('[data-md]').forEach(function (btn) {
