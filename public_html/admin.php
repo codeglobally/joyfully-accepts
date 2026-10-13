@@ -223,12 +223,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'delete') {
         db()->prepare('DELETE FROM guests WHERE id = ?')->execute([(int)input($_POST, 'id')]);
         $message = 'Invitation deleted.';
-    } elseif ($action === 'delete_selected') {
+    } elseif ($action === 'delete_selected' || $action === 'send_selected') {
         // The ticked rows in the guest table (ids[] from the checkboxes).
         $ids = is_array($_POST['ids'] ?? null) ? $_POST['ids'] : [];
         $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        $settings = mail_settings();
         if (!$ids) {
-            $message = 'Tick the invitations you want to delete first.';
+            $message = 'Tick the invitations you want to ' . ($action === 'send_selected' ? 'send' : 'delete') . ' first.';
+        } elseif ($action === 'send_selected') {
+            if (!valid_email($settings['from'])) {
+                $message = 'The From address on the Invitation email tab isn\'t valid, so nothing was sent.';
+            } else {
+                set_time_limit(300);
+                $q = db()->prepare('SELECT * FROM guests WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') ORDER BY name COLLATE NOCASE');
+                $q->execute($ids);
+                $sent = 0;
+                $resent = 0;
+                $failed = [];
+                $noEmail = [];
+                foreach ($q->fetchAll() as $g) {
+                    if (!sendable_emails($g['email'])) {
+                        $noEmail[] = $g['name'];
+                    } elseif (send_invite($g, $settings)) {
+                        $sent++;
+                        $resent += $g['invited_at'] ? 1 : 0;
+                    } else {
+                        $failed[] = $g['name'];
+                    }
+                }
+                $message = 'Sent ' . $sent . ' ' . ($sent === 1 ? 'invitation' : 'invitations')
+                    . ($resent ? " ($resent of them again)" : '') . '.';
+                if ($noEmail) {
+                    $message .= ' No email address for: ' . implode(', ', $noEmail) . '.';
+                }
+                if ($failed) {
+                    $message .= ' Could not send to: ' . implode(', ', $failed) . '. Your host may limit emails per hour; try again later.';
+                }
+            }
         } else {
             $q = db()->prepare('DELETE FROM guests WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
             $q->execute($ids);
@@ -724,16 +755,27 @@ page_header('Admin', 'admin');
       </form>
     <?php endforeach; ?>
     <?php if ($guests): ?>
-    <form method="post" id="bulk" class="bulk-bar" data-confirm="Delete the ticked invitations? This can't be undone.">
+    <form method="post" id="bulk" class="bulk-bar">
       <?= csrf_field() ?>
-      <span id="bulk-count" class="hint" aria-live="polite">Tick invitations to delete several at once.</span>
-      <button type="submit" class="bulk-delete" name="action" value="delete_selected">
+      <span id="bulk-count" class="hint" aria-live="polite">Tick invitations to send or delete several at once.</span>
+      <span class="bulk-actions">
+      <button type="submit" class="bulk-send" name="action" value="send_selected"
+              data-confirm="Send the invitation to the ticked guests?">
+        <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>
+        </svg>
+        <span class="bulk-send-label">Send selected</span>
+      </button>
+      <button type="submit" class="bulk-delete" name="action" value="delete_selected"
+              data-confirm="Delete the ticked invitations? This can't be undone.">
         <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>
         </svg>
         Delete selected
       </button>
+      </span>
     </form>
     <?php endif; ?>
     <div class="table-wrap">
@@ -745,7 +787,8 @@ page_header('Admin', 'admin');
             $who = attendees($g);
             $invited = count(party_members($g['name'])); ?>
           <tr id="guest-<?= (int)$g['id'] ?>" <?= $g['id'] == $editId ? 'class="editing"' : '' ?>>
-            <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="Select <?= h($g['name']) ?>"></td>
+            <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="Select <?= h($g['name']) ?>"
+              data-sendable="<?= sendable_emails($g['email']) ? '1' : '0' ?>" data-sent="<?= $g['invited_at'] ? '1' : '0' ?>"></td>
             <td class="name-cell"><?= h($g['name']) ?></td>
             <td class="email-cell">
               <?php foreach (email_list($g['email']) as $address): ?>

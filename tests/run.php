@@ -263,12 +263,27 @@ foreach ($argv as $arg) {
     $log = (string)@file_get_contents($mailLog);
     check('invitation sent to each address', substr_count($log, '==== ') === 2 && strpos($log, '<ali@example.com>') !== false && strpos($log, '<jo@example.com>') !== false);
     check('sending marks the invitation as emailed', db()->query("SELECT invited_at FROM guests WHERE id = " . (int)$khan)->fetchColumn() !== null);
+
+    // Tick several invitations and send them together.
+    db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, NULL)')->execute([generate_code(), 'Gran No-Email']);
+    $gran = db()->query("SELECT id FROM guests WHERE name = 'Gran No-Email'")->fetchColumn();
+    $ken = db()->query("SELECT id FROM guests WHERE name = 'Uncle Ken'")->fetchColumn();
+    $form = $get('/admin.php?tab=guests');
+    check('tick boxes say who has been emailed', (bool)preg_match('#value="' . (int)$khan . '"[^>]*data-sendable="1" data-sent="1"#', $form['body']));
+    @unlink($mailLog);
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'send_selected', 'ids' => [$khan, $ken, $gran]]);
+    $log = (string)@file_get_contents($mailLog);
+    check('ticked invitations sent, each address once', substr_count($log, '==== ') === 3 && strpos($log, '<ken@example.com>') !== false);
+    check('send message counts resends and no-email guests',
+        strpos($get('/admin.php?tab=guests')['body'], 'Sent 2 invitations (1 of them again). No email address for: Gran No-Email.') !== false);
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'send_selected']);
+    check('nothing ticked, nothing sent', strpos($get('/admin.php?tab=guests')['body'], 'Tick the invitations you want to send first.') !== false);
     @unlink($mailLog);
 
     // Tick several invitations and delete them together.
     $form = $get('/admin.php?tab=guests');
     check('each invitation has a tick box', substr_count($form['body'], 'name="ids[]"') === (int)db()->query('SELECT COUNT(*) FROM guests')->fetchColumn());
-    $ken = db()->query("SELECT id FROM guests WHERE name = 'Uncle Ken'")->fetchColumn();
     $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'delete_selected', 'ids' => [$khan, $ken]]);
     check('ticked invitations deleted together', strpos($get('/admin.php?tab=guests')['body'], 'Deleted 2 invitations.') !== false
         && !db()->query("SELECT COUNT(*) FROM guests WHERE id IN (" . (int)$khan . ', ' . (int)$ken . ')')->fetchColumn());

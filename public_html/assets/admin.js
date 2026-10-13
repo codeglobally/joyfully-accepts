@@ -19,23 +19,42 @@ document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
   });
 });
 
-// Ticking invitations in the guest table for "Delete selected". The
-// checkboxes belong to the form above the table (form="bulk"), so they work
-// without this script too; this adds "select all", a count, and a clearer
-// confirmation.
+// Ticking invitations in the guest table for "Send selected" and "Delete
+// selected". The checkboxes belong to the form above the table (form="bulk"),
+// so they work without this script too; this adds "select all", a count,
+// labels that say send or resend, and confirmations with numbers in.
 (function () {
   var form = document.getElementById('bulk');
   if (!form) return;
   var boxes = Array.prototype.slice.call(document.querySelectorAll('input[name="ids[]"][form="bulk"]'));
   var all = document.getElementById('select-all');
   var count = document.getElementById('bulk-count');
-  var button = form.querySelector('button[value="delete_selected"]');
+  var del = form.querySelector('button[value="delete_selected"]');
+  var send = form.querySelector('button[value="send_selected"]');
+  var sendLabel = send.querySelector('.bulk-send-label');
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
   function update() {
-    var n = boxes.filter(function (b) { return b.checked; }).length;
-    count.textContent = n ? n + ' selected' : 'Tick invitations to delete several at once.';
-    button.disabled = n === 0;
-    form.dataset.confirm = 'Delete ' + (n === 1 ? 'this invitation' : 'these ' + n + ' invitations') + "? This can't be undone.";
+    var ticked = boxes.filter(function (b) { return b.checked; });
+    var n = ticked.length;
+    var sendable = ticked.filter(function (b) { return b.dataset.sendable === '1'; });
+    var again = sendable.filter(function (b) { return b.dataset.sent === '1'; }).length;
+    var skipped = n - sendable.length;
+    count.textContent = n ? n + ' selected' : 'Tick invitations to send or delete several at once.';
+
+    del.disabled = n === 0;
+    del.dataset.confirm = 'Delete ' + (n === 1 ? 'this invitation' : 'these ' + n + ' invitations') + "? This can't be undone.";
+
+    send.disabled = sendable.length === 0;
+    sendLabel.textContent = again === 0 ? 'Send selected' : again === sendable.length ? 'Resend selected' : 'Send / resend selected';
+    var msg = 'Send the invitation to ' + plural(sendable.length, 'guest') + '?';
+    if (again && again === sendable.length) {
+      msg += again === 1 ? " They've had it before, so they'll get it again." : " They've all had it before, so they'll get it again.";
+    } else if (again) {
+      msg += ' ' + again + ' of them ' + (again === 1 ? 'has' : 'have') + ' had it before and will get it again.';
+    }
+    if (skipped) msg += ' ' + plural(skipped, 'ticked invitation') + ' with no email address will be skipped.';
+    send.dataset.confirm = msg;
     all.checked = n > 0 && n === boxes.length;
     all.indeterminate = n > 0 && n < boxes.length;
     boxes.forEach(function (b) { b.closest('tr').classList.toggle('selected', b.checked); });
