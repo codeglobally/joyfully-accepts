@@ -293,7 +293,7 @@ button:disabled { opacity: 0.45; cursor: default; filter: none; }
 form.inline { display: inline; }
 tr.editing td { background: var(--bg); }
 .edit-guest { margin: 4px 0 16px; padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
-.edit-guest label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); flex: 1 1 200px; }
+.edit-guest label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); flex: 1 1 200px; min-width: 0; }
 .edit-guest input {
   padding: 8px 10px;
   font: 0.95rem var(--font);
@@ -316,6 +316,35 @@ td.dietary-cell { white-space: normal; min-width: 130px; max-width: 280px; }
 /* Let long names and email addresses wrap rather than widen the table. */
 td.name-cell { white-space: normal; min-width: 110px; max-width: 220px; }
 td.email-cell { white-space: normal; overflow-wrap: anywhere; min-width: 150px; max-width: 260px; }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 4px 0 8px; }
+.bulk-bar .hint { margin: 0; }
+.bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button.bulk-send, button.bulk-delete {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 0.85rem;
+  background: none; border: 1px solid currentColor;
+}
+button.bulk-send { color: var(--accent); }
+button.bulk-delete { color: var(--error); }
+button.bulk-send:disabled, button.bulk-delete:disabled { color: var(--muted); }
+th.select-cell, td.select-cell { width: 1%; padding-right: 0; }
+.select-cell input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+tr.selected td { background: var(--bg); }
+/* Names: the surname a first-names greeting would leave out, and the greeting when it differs. */
+.name-cell .surname { font-weight: 600; }
+.greeted-as { display: block; margin-top: 2px; font-size: 0.78rem; color: var(--muted); }
+.greeting-style { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 4px 0 14px; }
+.greeting-style label { font-size: 0.9rem; }
+.greeting-style select { padding: 7px 10px; font: 0.9rem var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; max-width: 100%; }
+.greeting-style button { padding: 7px 14px; font-size: 0.85rem; }
+.greeting-style .hint { flex: 1 1 100%; margin: 0; }
+.edit-guest select { width: 100%; min-width: 0; padding: 8px 10px; font: 0.95rem var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.email-address { display: block; }              /* one address per line when there are several */
+.edit-email { flex: 1 1 100%; margin: -4px 0 0; }
+/* Upload a CSV, under the "Add invitations" box. */
+.csv-upload { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.csv-upload .hint { margin: 4px 0 12px; }
+.csv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.csv-row input[type="file"] { flex: 1 1 220px; font: 0.95rem var(--font); color: var(--ink); }
 .edit-people { flex: 1 1 100%; margin: 0; }
 
 .row-between { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
@@ -828,3 +857,71 @@ body.photo-bg::after {
 .not-found .quip { margin: 18px 0 6px; font-size: 1.15rem; font-style: italic; color: var(--ink); }
 .not-found .hint { margin: 0 0 22px; color: var(--muted); }
 .not-found a.button { display: block; text-align: center; text-decoration: none; }
+
+/* Passkeys: the sign-in button under the password one, and the add form. */
+.code-box .passkey-button { margin-top: 10px; }
+.passkey-step .link { margin-top: 12px; }
+.passkey-add { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.passkey-add .error { margin: 10px 0 0; }
+.passkey-add input[type="text"] {
+  flex: 1 1 200px; padding: 9px 10px; font: 0.95rem var(--font); color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+}
+.passkey-add label { display: block; margin-bottom: 6px; }
+
+/* Account menu (top right of admin): avatar, then a panel with who's signed in,
+   their sign-in settings and Sign out. */
+.account-menu { position: relative; }
+.account-menu summary { list-style: none; cursor: pointer; position: relative; display: flex; border-radius: 50%; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); font: 600 0.85rem var(--font); letter-spacing: 0.03em;
+}
+.avatar.large { width: 44px; height: 44px; font-size: 1rem; }
+.account-menu[open] summary .avatar { box-shadow: 0 0 0 3px var(--line); }
+.avatar-dot {
+  position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--error); border: 2px solid var(--bg);
+}
+.account-panel {
+  position: absolute; right: 0; top: calc(100% + 10px); z-index: 30;
+  width: 280px; max-width: calc(100vw - 32px); padding: 6px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+.account-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.account-who strong { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.account-who div span { font-size: 0.8rem; color: var(--muted); }
+.account-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: 9px 10px; border: 0; border-radius: 8px; background: none;
+  color: var(--ink); font: 0.95rem var(--font); text-align: left; text-decoration: none; cursor: pointer;
+}
+.account-item:hover, .account-item:focus-visible { background: var(--bg); filter: none; }
+.account-item[aria-current="page"] span { font-weight: 600; }
+.account-item small { font-size: 0.8rem; color: var(--muted); }
+.account-item small.nudge { color: var(--error); }
+.account-signout { margin: 4px 0 0; padding-top: 4px; border-top: 1px solid var(--line); }
+.page-title { margin: 0 0 12px; font-weight: 400; }
+
+/* Guest page: a bigger "Welcome" above the guest's name. */
+.hero .eyebrow { font-size: 1rem; letter-spacing: 0.22em; margin-bottom: 10px; }
+
+/* A gentle double wiggle of the RSVP card, shortly after the page opens, for
+   guests who haven't replied or said "not sure yet". Off with reduce motion. */
+.card.nudge { transform-origin: 50% 100%; animation: nudge 1.8s ease-in-out 1.2s 1; }
+@keyframes nudge {
+  0%, 100% { transform: rotate(0); }
+  8% { transform: rotate(-1.4deg); }
+  16% { transform: rotate(1.2deg); }
+  24% { transform: rotate(-0.7deg); }
+  32% { transform: rotate(0); }
+  58% { transform: rotate(0); }
+  66% { transform: rotate(-1deg); }
+  74% { transform: rotate(0.8deg); }
+  82% { transform: rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) { .card.nudge { animation: none; } }

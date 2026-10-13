@@ -27,6 +27,9 @@ function users_db(): PDO
         if (!in_array('email', $columns, true)) {
             $pdo->exec('ALTER TABLE users ADD COLUMN email TEXT');
         }
+        if (!in_array('session_key', $columns, true)) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN session_key TEXT');   // see admin_session_key()
+        }
         $ready = true;
     }
     return $pdo;
@@ -52,7 +55,7 @@ function check_login(string $username, string $password): ?array
 {
     $username = normalise_username($username);
     if ($username === OWNER_USERNAME) {
-        return ADMIN_PASSWORD !== 'change-me-please' && hash_equals(ADMIN_PASSWORD, $password)
+        return ADMIN_PASSWORD !== 'change-me-please' && hash_equals(hash('sha256', ADMIN_PASSWORD), hash('sha256', $password))
             ? ['id' => 0, 'name' => 'Admin', 'owner' => true]
             : null;
     }
@@ -74,14 +77,99 @@ function check_login(string $username, string $password): ?array
 function sign_in(array $user): void
 {
     session_regenerate_id(true);
+    unset($_SESSION['csrf']);   // a fresh form token for the signed-in session
     $_SESSION['is_admin'] = true;
-    $_SESSION['admin_seen'] = time();
+    $_SESSION['admin_seen'] = $_SESSION['admin_since'] = time();
     $_SESSION['admin_user'] = $user;
+    $_SESSION['admin_key'] = admin_session_key((int)$user['id']);
 }
 
+// Someone who has given the right password but still needs to confirm with
+// their passkey (for a few minutes), or null.
+function pending_admin(): ?array
+{
+    $p = $_SESSION['pending_admin'] ?? null;
+    if (!is_array($p) || ($p['until'] ?? 0) < time() || !is_array($p['user'] ?? null)) {
+        unset($_SESSION['pending_admin']);
+        return null;
+    }
+    return $p['user'];
+}
+
+// The person a passkey belongs to, ready for sign_in(), or null if they can
+// no longer sign in (removed, or waiting to choose a new password).
+function admin_by_id(int $id): ?array
+{
+    if ($id === 0) {
+        return ['id' => 0, 'name' => 'Admin', 'owner' => true];
+    }
+    $q = users_db()->prepare('SELECT * FROM users WHERE id = ? AND password_hash IS NOT NULL');
+    $q->execute([$id]);
+    $user = $q->fetch();
+    if (!$user) {
+        return null;
+    }
+    users_db()->prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?')->execute([$id]);
+    return ['id' => (int)$user['id'], 'name' => $user['name'], 'owner' => false];
+}
+
+// The signed-in person: ['id' => …, 'name' => …, 'owner' => bool]. A session
+// without one counts as nobody, never as the owner.
 function current_admin(): array
 {
-    return $_SESSION['admin_user'] ?? ['id' => 0, 'name' => 'Admin', 'owner' => true];
+    $user = $_SESSION['admin_user'] ?? null;
+    return is_array($user) ? $user : ['id' => -1, 'name' => '', 'owner' => false];
+}
+
+// A random key that changes whenever someone's password does. Sign-in stores
+// it in the session and admin.php checks it on every request, so changing a
+// password (a reset link, a new password, or a new ADMIN_PASSWORD in
+// config.php) signs out every session that used the old one.
+function admin_session_key(int $id): string
+{
+    if ($id === 0) {
+        // The owner's password lives in config.php. Notice when it changes by
+        // keeping a keyed fingerprint of it (never the password) in the database.
+        $secret = setting('owner_secret');
+        if ($secret === '') {
+            $secret = bin2hex(random_bytes(32));
+            save_setting('owner_secret', $secret);
+        }
+        $fingerprint = hash_hmac('sha256', ADMIN_PASSWORD, $secret);
+        if (!hash_equals(setting('owner_fingerprint'), $fingerprint) || setting('owner_session_key') === '') {
+            save_setting('owner_fingerprint', $fingerprint);
+            save_setting('owner_session_key', bin2hex(random_bytes(16)));
+        }
+        return setting('owner_session_key');
+    }
+    $q = users_db()->prepare('SELECT session_key FROM users WHERE id = ? AND password_hash IS NOT NULL');
+    $q->execute([$id]);
+    $row = $q->fetch();
+    if (!$row) {
+        return '';   // removed, or waiting to choose a new password
+    }
+    return (string)$row['session_key'] !== '' ? (string)$row['session_key'] : new_session_key($id);
+}
+
+// Gives someone a new session key, signing out their existing sessions.
+function new_session_key(int $id): string
+{
+    $key = bin2hex(random_bytes(16));
+    users_db()->prepare('UPDATE users SET session_key = ? WHERE id = ?')->execute([$key, $id]);
+    return $key;
+}
+
+// True while the session's person still exists with the same password, and
+// it's within the time limits (2 hours idle, checked by is_admin(), and 12
+// hours in all).
+function admin_session_valid(): bool
+{
+    $me = current_admin();
+    if ($me['id'] < 0 || time() - (int)($_SESSION['admin_since'] ?? 0) > 12 * 60 * 60) {
+        return false;
+    }
+    $key = admin_session_key((int)$me['id']);
+    return $key !== '' && hash_equals($key, (string)($_SESSION['admin_key'] ?? ''));
 }
 
 function is_owner(): bool
@@ -111,8 +199,8 @@ function user_for_setup_token(string $token): ?array
 
 function set_password(int $userId, string $password): void
 {
-    users_db()->prepare('UPDATE users SET password_hash = ?, setup_hash = NULL, setup_expires = NULL WHERE id = ?')
-        ->execute([password_hash($password, PASSWORD_DEFAULT), $userId]);
+    users_db()->prepare('UPDATE users SET password_hash = ?, setup_hash = NULL, setup_expires = NULL, session_key = ? WHERE id = ?')
+        ->execute([password_hash($password, PASSWORD_DEFAULT), bin2hex(random_bytes(16)), $userId]);
 }
 
 function find_user(int $id): ?array

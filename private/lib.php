@@ -24,7 +24,7 @@ const APP_DIR = __DIR__;
 
 // Bump this with every release. It's shown in the lightbox footer and also
 // makes browsers fetch fresh copies of the stylesheet and scripts.
-const SITE_VERSION = '2.2';
+const SITE_VERSION = '2.3';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';
@@ -123,7 +123,26 @@ function db(): PDO
     if (!in_array('notify', $columns, true)) {
         $pdo->exec('ALTER TABLE guests ADD COLUMN notify INTEGER NOT NULL DEFAULT 1');   // 0 = opted out of updates
     }
+    if (!in_array('greeting', $columns, true)) {
+        $pdo->exec('ALTER TABLE guests ADD COLUMN greeting TEXT');         // typed greeting, used as it is
+        $pdo->exec('ALTER TABLE guests ADD COLUMN greeting_style TEXT');   // 'full', 'first', or NULL for the site's choice
+    }
     return $pdo;
+}
+
+// Site-wide settings (email template, greeting style, cached photo colours).
+function setting(string $key, string $default = ''): string
+{
+    $q = db()->prepare('SELECT value FROM settings WHERE key = ?');
+    $q->execute([$key]);
+    $value = $q->fetchColumn();
+    return $value === false ? $default : $value;
+}
+
+function save_setting(string $key, string $value): void
+{
+    db()->prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+        ->execute([$key, $value]);
 }
 
 // Read a request value as a string. Anything else (e.g. an array sent as
@@ -259,23 +278,227 @@ function dietary_summary(array $guest): string
     return implode('; ', $items);
 }
 
-// Splits a line from "Add invitations" into [name, email].
-//   "Sarah, Tom and Lily; sarah@example.com"  -> email after the semicolon
-//   "Sarah & Tom, sarah@example.com"          -> old comma style still works,
-//                                                but only if the last part has an @
-//   "Sarah, Tom and Lily"                     -> all of it is the name
+// --- Names and greetings --------------------------------------------
+// Each invitation has one name ("Sarah, Tom and Lily Jones"). Guests can be
+// greeted by that full name or by first names only ("Sarah, Tom and Lily"):
+// one choice for the whole site, which each invitation can override, or a
+// greeting typed in for that invitation.
+
+const NAME_SEPARATORS = '/(\s*(?:&|\+|,|\band\b|\bplus\b)\s*)/i';
+// Words before a name that aren't first names. A title keeps the surname
+// ("Mr Smith"); a relation is followed by a first name ("Uncle Bob").
+const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col';
+const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby';
+
+// One person's name split into [the rest, surname, whether a first-names
+// greeting may drop it], or null when there's no surname to find:
+//   "Lily Jones" -> ["Lily", "Jones", true]
+//   "Mr Smith"   -> ["Mr", "Smith", false]   (titles keep the surname)
+//   "Uncle Bob"  -> null                     (Bob is a first name)
+//   "Gran"       -> null
+function person_surname(string $person): ?array
+{
+    $words = preg_split('/\s+/', trim($person), -1, PREG_SPLIT_NO_EMPTY);
+    $titled = $words && preg_match('/^(' . NAME_TITLES . ')\.?$/i', $words[0]);
+    $first = $titled ? 1 : 0;
+    while ($first < count($words) - 1 && preg_match('/^(' . NAME_RELATIONS . ')$/i', $words[$first])) {
+        $first++;
+    }
+    if (count($words) - $first < ($titled ? 1 : 2)) {
+        return null;
+    }
+    // The last word, with any particles before it ("van der Berg", "de la Cruz", "Ó Briain").
+    $start = count($words) - 1;
+    while ($start - 1 > $first
+        && preg_match('/^(van|von|de|der|den|da|di|du|la|le|del|della|dos|das|st\.?|ter|ten|ó|o|ní|nic|mac|mc|ap|bin|bint|ibn|al|el)$/iu', $words[$start - 1])) {
+        $start--;
+    }
+    return [implode(' ', array_slice($words, 0, $start)), implode(' ', array_slice($words, $start)), !$titled];
+}
+
+// "The Smith Family" and similar are left exactly as written.
+function is_family_name(string $name): bool
+{
+    return (bool)preg_match('/\b(family|household|kids|children)\b/i', $name);
+}
+
+// The name with surnames taken off: "Sarah, Tom and Lily Jones" ->
+// "Sarah, Tom and Lily", "Ali Khan & Jo Smith" -> "Ali & Jo". Titles,
+// relations and family names stay as they are.
+function first_names(string $name): string
+{
+    if (is_family_name($name)) {
+        return trim($name);
+    }
+    $pieces = preg_split(NAME_SEPARATORS, trim($name), -1, PREG_SPLIT_DELIM_CAPTURE);
+    foreach ($pieces as $i => $piece) {
+        if ($i % 2 === 0 && ($split = person_surname($piece)) && $split[2]) {
+            $pieces[$i] = $split[0];
+        }
+    }
+    return implode('', $pieces);
+}
+
+// The name as HTML with each surname in bold, so the admin can see what a
+// first-names greeting would leave out.
+function name_html(string $name): string
+{
+    if (is_family_name($name)) {
+        return h($name);
+    }
+    $html = '';
+    foreach (preg_split(NAME_SEPARATORS, trim($name), -1, PREG_SPLIT_DELIM_CAPTURE) as $i => $piece) {
+        $split = $i % 2 === 0 ? person_surname($piece) : null;
+        $html .= $split
+            ? h($split[0]) . ($split[0] !== '' ? ' ' : '') . '<strong class="surname">' . h($split[1]) . '</strong>'
+            : h($piece);
+    }
+    return $html;
+}
+
+// Up to two initials for an avatar: "Sam Jones" -> "SJ", "Admin" -> "A".
+function initials(string $name): string
+{
+    $letters = [];
+    foreach (preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) as $word) {
+        if (preg_match('/\p{L}/u', $word, $m)) {
+            $letters[] = $m[0];   // first letter of each word ("O'Neil" -> O; "&" is skipped)
+        }
+    }
+    $letters = $letters ?: ['?'];
+    $pick = count($letters) > 1 ? $letters[0] . end($letters) : $letters[0];
+    return function_exists('mb_strtoupper') ? mb_strtoupper($pick) : strtoupper($pick);
+}
+
+// The site-wide choice: 'full' (the default) or 'first'.
+function site_greeting_style(): string
+{
+    return setting('greeting_style', 'full') === 'first' ? 'first' : 'full';
+}
+
+// What to call a guest in emails ({name}) and on their invitation page.
+function greeting_name(array $guest): string
+{
+    $typed = trim((string)($guest['greeting'] ?? ''));
+    if ($typed !== '') {
+        return $typed;
+    }
+    $style = in_array($guest['greeting_style'] ?? '', ['full', 'first'], true) ? $guest['greeting_style'] : site_greeting_style();
+    return $style === 'first' ? first_names((string)$guest['name']) : (string)$guest['name'];
+}
+
+// Splits a line from "Add invitations" into [name, emails]. The addresses
+// start at the first part with an @ in it, so a couple can have one each.
+//   "Sarah, Tom and Lily; sarah@example.com"             -> email after the semicolon
+//   "Sarah & Tom; sarah@example.com; tom@example.com"    -> both addresses
+//   "Sarah & Tom, sarah@example.com"                     -> old comma style still works
+//   "Sarah, Tom and Lily"                                -> all of it is the name
 function split_guest_line(string $line): array
 {
     $line = trim($line);
+    foreach ([';', ','] as $separator) {
+        $parts = explode($separator, $line);
+        for ($i = 1; $i < count($parts); $i++) {
+            if (strpos($parts[$i], '@') !== false) {
+                return [trim(implode($separator, array_slice($parts, 0, $i))), clean_emails(implode(',', array_slice($parts, $i)))];
+            }
+        }
+    }
     if (strpos($line, ';') !== false) {
+        // "Name; something" with no @: keep it, so it's flagged as a bad address.
         $at = strrpos($line, ';');
         return [trim(substr($line, 0, $at)), trim(substr($line, $at + 1))];
     }
-    $at = strrpos($line, ',');
-    if ($at !== false && strpos(substr($line, $at + 1), '@') !== false) {
-        return [trim(substr($line, 0, $at)), trim(substr($line, $at + 1))];
-    }
     return [$line, ''];
+}
+
+// Reads an uploaded CSV of invitations into [[name, emails], …].
+// One invitation per row: a name, then any email addresses. A first row of
+// headings ("Name", "Email", "Email 2"…) is recognised: the name comes from
+// the first column headed Name, Guest(s) or Invitation, the addresses from
+// every column with "mail" in its heading, and anything else (notes, phone
+// numbers) is ignored. Without headings, the first column is the name and any
+// other cell containing an @ is an address. Works with commas, semicolons or
+// tabs between columns, and with files saved from Excel or Numbers.
+function parse_guest_csv(string $csv): array
+{
+    $csv = (string)preg_replace('/^\xEF\xBB\xBF/', '', $csv);   // Excel's byte-order mark
+    if (!preg_match('//u', $csv) && function_exists('mb_convert_encoding')) {
+        $csv = (string)mb_convert_encoding($csv, 'UTF-8', 'Windows-1252');   // older Excel
+    }
+    $first = strtok($csv, "\n") ?: '';
+    $counts = [',' => substr_count($first, ','), ';' => substr_count($first, ';'), "\t" => substr_count($first, "\t")];
+    $delimiter = array_search(max($counts), $counts, true);
+
+    $in = fopen('php://memory', 'r+');
+    fwrite($in, $csv);
+    rewind($in);
+    $rows = [];
+    $nameCol = 0;
+    $emailCols = null;   // null = no headings: any other cell with an @
+    $line = 0;
+    while (($cells = fgetcsv($in, 0, (string)$delimiter, '"', '')) !== false) {
+        $cells = array_map(fn($c) => trim((string)$c), $cells);
+        $heading = '/^(full |guest |first |party )?(names?|guests?|invit\w*|e-?mails?( address(es)?)?)( ?\d+)?$/i';
+        if ($line++ === 0 && !preg_grep('/@/', $cells) && preg_grep($heading, $cells)) {
+            $emailCols = array_keys(preg_grep('/mail/i', $cells));
+            $named = array_keys(array_diff_key(preg_grep('/name|guest|invit/i', $cells), array_flip($emailCols)));
+            $nameCol = $named ? $named[0] : 0;
+            continue;
+        }
+        $name = $cells[$nameCol] ?? '';
+        if ($emailCols === null && count($cells) === 1) {
+            [$name, $emails] = split_guest_line($name);   // a single column of "Name; email" lines
+        } else {
+            $emails = [];
+            foreach ($cells as $i => $cell) {
+                if ($i !== $nameCol && $cell !== '' && ($emailCols === null ? strpos($cell, '@') !== false : in_array($i, $emailCols, true))) {
+                    $emails[] = $cell;
+                }
+            }
+            $emails = clean_emails(implode(',', $emails));
+        }
+        if ($name !== '') {
+            $rows[] = [$name, $emails];
+        }
+    }
+    fclose($in);
+    return $rows;
+}
+
+// Adds invitations from [[name, emails], …], each with its own code.
+// $skipExisting leaves out names already on the list (so uploading the same
+// file twice doesn't double up). Returns [added, names with a bad address,
+// names skipped].
+function add_guests(array $rows, bool $skipExisting = false): array
+{
+    // Names compare without caring about capitals (mbstring copes with accents too).
+    $key = fn(string $name) => function_exists('mb_strtolower') ? mb_strtolower(trim($name)) : strtolower(trim($name));
+    $existing = [];
+    if ($skipExisting) {
+        foreach (db()->query('SELECT name FROM guests')->fetchAll() as $g) {
+            $existing[$key($g['name'])] = true;
+        }
+    }
+    $insert = db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, ?)');
+    $added = 0;
+    $bad = [];
+    $skipped = [];
+    foreach ($rows as [$name, $emails]) {
+        if (isset($existing[$key($name)])) {
+            $skipped[] = $name;
+            continue;
+        }
+        if (has_bad_email($emails)) {
+            $bad[] = $name;
+        }
+        $insert->execute([generate_code(), $name, $emails !== '' ? $emails : null]);
+        if ($skipExisting) {
+            $existing[$key($name)] = true;   // and a repeat within the same file
+        }
+        $added++;
+    }
+    return [$added, $bad, $skipped];
 }
 
 // Dietary requirements across everyone coming, for the admin summary.

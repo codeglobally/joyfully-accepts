@@ -7,6 +7,7 @@ require APP_DIR . '/content.php';
 require APP_DIR . '/users.php';
 require APP_DIR . '/notify.php';
 require APP_DIR . '/insights.php';
+require APP_DIR . '/passkeys.php';
 
 $error = '';
 $message = '';
@@ -102,7 +103,81 @@ if (isset($_GET['forgot'])) {
     exit;
 }
 
+// --- Passkey options (asked for by assets/passkey.js) ----------------
+
+if (isset($_GET['passkey_options']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    check_csrf();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $origin = passkey_origin();
+    $purpose = input($_POST, 'purpose');
+    $pending = pending_admin();
+    $options = null;
+    if (!$origin) {
+        http_response_code(400);
+        exit(json_encode(['error' => 'Passkeys only work on ' . SITE_URL . '.']));
+    } elseif ($purpose === 'login') {
+        $options = passkey_get_options($origin, 'login');
+    } elseif ($purpose === 'confirm' && $pending) {
+        $options = passkey_get_options($origin, 'confirm', (int)$pending['id']);
+    } elseif ($purpose === 'register' && is_admin() && admin_session_valid()) {
+        $me = current_admin();
+        $username = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') : OWNER_USERNAME;
+        $options = passkey_create_options($origin, $me, $username);
+    }
+    if ($options === null) {
+        http_response_code(403);
+        exit(json_encode(['error' => 'Please sign in again.']));
+    }
+    exit(json_encode($options));
+}
+
 // --- Login -----------------------------------------------------------
+// A password, a passkey, or both: once someone has a passkey, a correct
+// password only gets them to a "confirm with your passkey" step.
+
+$loginAction = $_SERVER['REQUEST_METHOD'] === 'POST' ? input($_POST, 'action') : '';
+if ($loginAction === 'cancel_sign_in') {
+    check_csrf();
+    unset($_SESSION['pending_admin'], $_SESSION['passkey']);
+    header('Location: /admin.php');
+    exit;
+}
+if ($loginAction === 'passkey_login' || $loginAction === 'passkey_confirm') {
+    check_csrf();
+    $purpose = $loginAction === 'passkey_login' ? 'login' : 'confirm';
+    $challenge = take_passkey_challenge($purpose);
+    $origin = passkey_origin();
+    $stored = find_passkey(input($_POST, 'credential_id'));
+    $pending = pending_admin();
+    $clientData = b64url_decode(input($_POST, 'client_data'));
+    $authData = b64url_decode(input($_POST, 'authenticator_data'));
+    $signature = b64url_decode(input($_POST, 'signature'));
+    $result = 'That passkey didn\'t work here. Please try again.';
+    if (too_many_attempts()) {
+        $result = 'Too many attempts. Please wait 15 minutes.';
+    } elseif ($challenge && $origin && $stored && $clientData !== null && $authData !== null && $signature !== null
+        && ($purpose === 'login' || ($pending && (int)$stored['user_id'] === (int)$pending['id']))) {
+        $result = verify_passkey_assertion(['challenge' => $challenge['challenge'], 'origin' => $origin[1], 'rp_id' => $origin[0]],
+            $stored, $clientData, $authData, $signature);
+    }
+    if (is_int($result)) {
+        $user = admin_by_id((int)$stored['user_id']);
+        if ($user) {
+            passkeys_db()->prepare('UPDATE passkeys SET sign_count = ?, last_used_at = CURRENT_TIMESTAMP WHERE id = ?')
+                ->execute([$result, $stored['id']]);
+            unset($_SESSION['pending_admin']);
+            sign_in($user);
+            header('Location: /admin.php');
+            exit;
+        }
+        $result = 'That passkey belongs to someone who can no longer sign in.';
+    }
+    if (!too_many_attempts()) {
+        record_failed_attempt();
+    }
+    $error = $result;
+}
 
 if (isset($_POST['login'])) {
     check_csrf();
@@ -110,6 +185,13 @@ if (isset($_POST['login'])) {
     if (too_many_attempts()) {
         $error = 'Too many attempts. Please wait 15 minutes.';
     } elseif ($user = check_login($username, input($_POST, 'password'))) {
+        if (passkey_required((int)$user['id'])) {
+            // Right password; now the passkey.
+            session_regenerate_id(true);
+            $_SESSION['pending_admin'] = ['user' => $user, 'until' => time() + PASSKEY_SECONDS];
+            header('Location: /admin.php');
+            exit;
+        }
         sign_in($user);
         header('Location: /admin.php');
         exit;
@@ -121,6 +203,27 @@ if (isset($_POST['login'])) {
     }
 }
 
+if (!is_admin() && ($pending = pending_admin())) {
+    page_header('Admin', 'centered admin');
+    ?>
+    <main class="entry">
+      <h1>Admin</h1>
+      <form method="post" class="code-box passkey-step">
+        <?= csrf_field() ?>
+        <p>Hi <?= h($pending['name']) ?>. Now confirm it's you with your passkey.</p>
+        <button type="button" data-passkey="confirm" hidden>Use my passkey</button>
+        <p class="error" data-passkey-unsupported hidden>This browser can't use passkeys. Try the browser or device where you added it.</p>
+        <p class="error" role="alert" data-passkey-message <?= $error ? '' : 'hidden' ?>><?= h($error) ?></p>
+        <button type="submit" class="link" name="action" value="cancel_sign_in">Sign in as someone else</button>
+      </form>
+      <p class="site-footer"><a href="/">&larr; Back to site</a></p>
+    </main>
+    <script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script>
+    <?php
+    page_footer();
+    exit;
+}
+
 if (!is_admin()) {
     page_header('Admin', 'centered admin');
     ?>
@@ -129,37 +232,38 @@ if (!is_admin()) {
       <form method="post" class="code-box">
         <?= csrf_field() ?>
         <label for="username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none"
+        <input id="username" name="username" type="text" autocomplete="username webauthn" autocapitalize="none"
                spellcheck="false" required autofocus value="<?= h(input($_POST, 'username')) ?>">
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
-        <?php if ($error): ?><p class="error" role="alert"><?= h($error) ?></p><?php endif; ?>
+        <p class="error" role="alert" data-passkey-message <?= $error ? '' : 'hidden' ?>><?= h($error) ?></p>
         <button type="submit" name="login" value="1">Sign in</button>
+        <button type="button" class="secondary passkey-button" data-passkey="login" hidden>Sign in with a passkey</button>
         <p class="forgot"><a href="/admin.php?forgot=1">Forgot password?</a></p>
       </form>
       <p class="site-footer"><a href="/">&larr; Back to site</a></p>
     </main>
+    <script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script>
     <?php
     page_footer();
     exit;
 }
 
 // A removed person's session ends straight away.
-$me = current_admin();
-if ($me['id']) {
-    $q = users_db()->prepare('SELECT 1 FROM users WHERE id = ? AND password_hash IS NOT NULL');
-    $q->execute([$me['id']]);
-    if (!$q->fetchColumn()) {
-        $_SESSION = [];
-        session_destroy();
-        header('Location: /admin.php');
-        exit;
-    }
+// A session ends straight away if its person has been removed or their
+// password has changed since they signed in (see admin_session_valid()).
+if (!admin_session_valid()) {
+    $_SESSION = [];
+    session_destroy();
+    header('Location: /admin.php');
+    exit;
 }
+$me = current_admin();
 
 $unreadFeedback = (int)db()->query('SELECT COUNT(*) FROM feedback WHERE read_at IS NULL')->fetchColumn();
 $tabs = ['guests' => 'Guests', 'insights' => 'Insights', 'email' => 'Invitation email', 'updates' => 'Updates', 'content' => 'Content',
     'feedback' => 'Feedback' . ($unreadFeedback ? " ($unreadFeedback)" : '')];
+$tabs['account'] = 'Your sign-in';
 if (is_owner()) {
     $tabs['people'] = 'People';
 }
@@ -179,30 +283,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $back = 'guests';          // the tab to return to
     $backExtra = '';           // e.g. reopen an editor
 
-    if ($action === 'add') {
-        // One guest per line: "Name; email" (email optional). Commas belong to
-        // the name ("Sarah, Tom and Lily"); see split_guest_line().
-        $insert = db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, ?)');
-        $added = 0;
-        $bad = [];
-        foreach (preg_split('/\r?\n/', input($_POST, 'guests')) as $line) {
-            [$name, $email] = split_guest_line($line);
-            if ($name === '') {
-                continue;
+    if ($action === 'add' || $action === 'upload_csv') {
+        // Typed lines: "Name; email" or "Name; email; email" (emails optional).
+        // Commas belong to the name ("Sarah, Tom and Lily"); see split_guest_line().
+        // Uploads: a CSV file read by parse_guest_csv(), never saved anywhere.
+        $rows = [];
+        $problem = '';
+        if ($action === 'add') {
+            foreach (preg_split('/\r?\n/', input($_POST, 'guests')) as $line) {
+                $row = split_guest_line($line);
+                if ($row[0] !== '') {
+                    $rows[] = $row;
+                }
             }
-            if ($email !== '' && !valid_email($email)) {
-                $bad[] = $name;
+        } else {
+            $file = $_FILES['csv'] ?? null;
+            if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
+                $problem = 'Choose a CSV file to upload.';
+            } elseif ($file['size'] > 1024 * 1024) {
+                $problem = 'That file is over 1 MB. A guest list should be much smaller, so check it\'s the right file.';
+            } else {
+                $rows = parse_guest_csv((string)file_get_contents((string)$file['tmp_name']));
+                if (count($rows) > 2000) {
+                    [$rows, $problem] = [[], 'That file has more than 2,000 rows, so nothing was added. Check it\'s the right file.'];
+                } elseif (!$rows) {
+                    $problem = 'No names found in that file. Put each invitation on its own row, with the name in the first column.';
+                }
             }
-            $insert->execute([generate_code(), $name, $email !== '' ? $email : null]);
-            $added++;
         }
-        $message = "Added $added " . ($added === 1 ? 'invitation' : 'invitations') . '.';
-        if ($bad) {
-            $message .= ' These email addresses look wrong, so they won\'t be emailed: ' . implode(', ', $bad) . '.';
+        if ($problem) {
+            $message = $problem;
+        } else {
+            [$added, $bad, $skipped] = add_guests($rows, $action === 'upload_csv');
+            $message = "Added $added " . ($added === 1 ? 'invitation' : 'invitations') . '.';
+            if ($skipped) {
+                $message .= ' Skipped ' . count($skipped) . ' already on the list: ' . implode(', ', array_slice($skipped, 0, 10))
+                    . (count($skipped) > 10 ? ' and ' . (count($skipped) - 10) . ' more' : '') . '.';
+            }
+            if ($bad) {
+                $message .= ' These have an email address that looks wrong, so it won\'t be used: ' . implode(', ', $bad) . '.';
+            }
         }
+    } elseif ($action === 'greeting_style') {
+        $style = input($_POST, 'style') === 'first' ? 'first' : 'full';
+        save_setting('greeting_style', $style);
+        $message = $style === 'first'
+            ? 'Guests are now greeted by first names only, unless you\'ve set something different for them.'
+            : 'Guests are now greeted by their full names, unless you\'ve set something different for them.';
     } elseif ($action === 'delete') {
         db()->prepare('DELETE FROM guests WHERE id = ?')->execute([(int)input($_POST, 'id')]);
         $message = 'Invitation deleted.';
+    } elseif ($action === 'delete_selected' || $action === 'send_selected') {
+        // The ticked rows in the guest table (ids[] from the checkboxes).
+        $ids = is_array($_POST['ids'] ?? null) ? $_POST['ids'] : [];
+        // PHP drops form fields past max_input_vars (usually 1,000) without saying,
+        // so a request that reaches the limit may be missing some: refuse it.
+        $tooMany = count($ids) >= ((int)ini_get('max_input_vars') ?: 1000) - 10;
+        $ids = $tooMany ? [] : array_values(array_unique(array_filter(array_map('intval', $ids), fn($id) => $id > 0)));
+        // In batches: older SQLite allows at most 999 values in one query.
+        $batches = array_map(fn($batch) => [$batch, implode(',', array_fill(0, count($batch), '?'))], array_chunk($ids, 500));
+        $settings = mail_settings();
+        if ($tooMany) {
+            $message = 'That\'s more invitations than can be sent in one go, so nothing was changed. Untick some and do it in two goes.';
+        } elseif (!$ids) {
+            $message = 'Tick the invitations you want to ' . ($action === 'send_selected' ? 'send' : 'delete') . ' first.';
+        } elseif ($action === 'send_selected') {
+            if (!valid_email($settings['from'])) {
+                $message = 'The From address on the Invitation email tab isn\'t valid, so nothing was sent.';
+            } else {
+                set_time_limit(300);
+                $chosen = [];
+                foreach ($batches as [$batch, $marks]) {
+                    $q = db()->prepare("SELECT * FROM guests WHERE id IN ($marks)");
+                    $q->execute($batch);
+                    $chosen = array_merge($chosen, $q->fetchAll());
+                }
+                usort($chosen, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+                $sent = 0;
+                $resent = 0;
+                $failed = [];
+                $noEmail = [];
+                foreach ($chosen as $g) {
+                    if (!sendable_emails($g['email'])) {
+                        $noEmail[] = $g['name'];
+                    } elseif (send_invite($g, $settings)) {
+                        $sent++;
+                        $resent += $g['invited_at'] ? 1 : 0;
+                    } else {
+                        $failed[] = $g['name'];
+                    }
+                }
+                $message = 'Sent ' . $sent . ' ' . ($sent === 1 ? 'invitation' : 'invitations')
+                    . ($resent ? " ($resent of them again)" : '') . '.';
+                if ($noEmail) {
+                    $message .= ' No email address for: ' . implode(', ', $noEmail) . '.';
+                }
+                if ($failed) {
+                    $message .= ' Could not send to: ' . implode(', ', $failed) . '. Your host may limit emails per hour; try again later.';
+                }
+            }
+        } else {
+            $deleted = 0;
+            foreach ($batches as [$batch, $marks]) {
+                $q = db()->prepare("DELETE FROM guests WHERE id IN ($marks)");
+                $q->execute($batch);
+                $deleted += $q->rowCount();
+            }
+            $message = 'Deleted ' . $deleted . ' ' . ($deleted === 1 ? 'invitation' : 'invitations') . '.';
+        }
     } elseif (in_array($action, ['save_email', 'preview', 'send_test', 'send_all'], true)) {
         $back = 'email';
         // The email form's buttons all save the template first.
@@ -231,7 +419,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             set_time_limit(300);
             $pending = array_filter(
                 db()->query('SELECT * FROM guests WHERE invited_at IS NULL')->fetchAll(),
-                fn($g) => valid_email($g['email'])
+                fn($g) => sendable_emails($g['email'])
             );
             $sent = 0;
             $failed = [];
@@ -252,7 +440,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'update') {
         $id = (int)input($_POST, 'id');
         $name = trim(input($_POST, 'name'));
-        $email = trim(input($_POST, 'email'));
+        $email = clean_emails(input($_POST, 'email'));
+        $greetingStyle = in_array(input($_POST, 'greeting_style'), ['full', 'first'], true) ? input($_POST, 'greeting_style') : null;
+        preg_match('/^.{0,120}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'greeting'))), $m);   // one line, 120 characters
+        $greeting = trim($m[0] ?? '');
         $q = db()->prepare('SELECT * FROM guests WHERE id = ?');
         $q->execute([$id]);
         $g = $q->fetch();
@@ -261,15 +452,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($name === '') {
             $message = 'The name can\'t be empty, so nothing was changed.';
         } else {
-            // A new email address hasn't been sent anything yet.
-            $emailChanged = $email !== (string)$g['email'];
-            db()->prepare('UPDATE guests SET name = ?, email = ?, invited_at = ? WHERE id = ?')
-                ->execute([$name, $email !== '' ? $email : null, $emailChanged ? null : $g['invited_at'], $id]);
+            // A new address hasn't been sent anything yet.
+            $emailChanged = $email !== clean_emails((string)$g['email']);
+            db()->prepare('UPDATE guests SET name = ?, email = ?, invited_at = ?, greeting = ?, greeting_style = ? WHERE id = ?')
+                ->execute([$name, $email !== '' ? $email : null, $emailChanged ? null : $g['invited_at'],
+                    $greeting !== '' ? $greeting : null, $greetingStyle, $id]);
             $message = 'Saved changes to ' . $name . '.';
-            if ($email !== '' && !valid_email($email)) {
-                $message .= ' That email address looks wrong, so they won\'t be emailed.';
+            if (has_bad_email($email)) {
+                $message .= sendable_emails($email)
+                    ? ' One of the email addresses looks wrong, so only the others will be used.'
+                    : ' That email address looks wrong, so they won\'t be emailed.';
             } elseif ($emailChanged && $email !== '' && $g['invited_at']) {
-                $message .= ' Their new address hasn\'t been sent the invitation yet.';
+                $message .= count(sendable_emails($email)) > 1
+                    ? ' The changed addresses haven\'t been sent the invitation yet. Sending it again sends a copy to each address.'
+                    : ' Their new address hasn\'t been sent the invitation yet.';
             }
         }
     } elseif ($action === 'send_one') {
@@ -277,9 +473,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $q->execute([(int)input($_POST, 'id')]);
         $g = $q->fetch();
         if ($g) {
+            $count = count(sendable_emails($g['email']));
             $message = send_invite($g, mail_settings())
-                ? 'Invitation sent to ' . $g['name'] . '.'
-                : 'Could not send to ' . $g['name'] . '. Check their email address and the From address.';
+                ? 'Invitation sent to ' . $g['name'] . ($count > 1 ? ($count === 2 ? ' (both addresses)' : " (all $count addresses)") : '') . '.'
+                : 'Could not send to ' . $g['name'] . ($count > 1 ? ' (at least one address)' : '') . '. Check their email address and the From address.';
         }
 
     // --- Updates (bulk emails) ---
@@ -420,6 +617,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Deleted "' . $s['title'] . '".';
         }
 
+    // --- Your passkeys ---
+    } elseif ($action === 'passkey_register') {
+        $back = 'account';
+        $challenge = take_passkey_challenge('register');
+        $origin = passkey_origin();
+        $clientData = b64url_decode(input($_POST, 'client_data'));
+        $attestation = b64url_decode(input($_POST, 'attestation'));
+        $result = 'That didn\'t work. Please try again.';
+        if ($challenge && $origin && (int)$challenge['user'] === (int)$me['id'] && $clientData !== null && $attestation !== null) {
+            $result = verify_passkey_registration(['challenge' => $challenge['challenge'], 'origin' => $origin[1], 'rp_id' => $origin[0]],
+                $clientData, $attestation);
+        }
+        if (is_array($result) && find_passkey($result['credential_id'])) {
+            $message = 'That passkey has already been added.';
+        } elseif (is_array($result)) {
+            preg_match('/^.{0,60}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'passkey_name'))), $m);
+            $first = !user_passkeys((int)$me['id']);
+            passkeys_db()->prepare('INSERT INTO passkeys (user_id, credential_id, public_key, sign_count, name) VALUES (?, ?, ?, ?, ?)')
+                ->execute([(int)$me['id'], $result['credential_id'], $result['public_key'], $result['count'], trim($m[0] ?? '') ?: 'Passkey']);
+            $message = 'Passkey added.' . ($first ? ' From now on you\'ll need it to sign in, on its own or after your password.' : '');
+        } else {
+            $message = $result;
+        }
+    } elseif ($action === 'passkey_remove') {
+        $back = 'account';
+        passkeys_db()->prepare('DELETE FROM passkeys WHERE id = ? AND user_id = ?')->execute([(int)input($_POST, 'id'), (int)$me['id']]);
+        $message = user_passkeys((int)$me['id'])
+            ? 'Passkey removed.'
+            : 'Passkey removed. You can now sign in with just your password, so consider adding another.';
+
     // --- People (owner only) ---
     } elseif (in_array($action, ['user_add', 'user_reset', 'user_remove', 'user_update'], true)) {
         $back = 'people';
@@ -463,8 +690,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "Saved changes to $name.";
                 }
             } elseif ($u && $action === 'user_reset') {
-                // Their old password stops working until they use the new link.
+                // Their old password stops working until they use the new link, and
+                // their passkeys are cleared (this is how someone recovers a lost one).
                 users_db()->prepare('UPDATE users SET password_hash = NULL WHERE id = ?')->execute([$u['id']]);
+                passkeys_db()->prepare('DELETE FROM passkeys WHERE user_id = ?')->execute([$u['id']]);
                 $url = new_setup_link((int)$u['id']);
                 $emailed = $emailIt && send_setup_email($u, $url, true);
                 $_SESSION['setup_link'] = ['name' => $u['name'], 'url' => $url, 'emailed' => $emailed ? $u['email'] : ''];
@@ -474,6 +703,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       . ($emailIt ? ' The email could not be sent, so send them the link yourself.' : '');
             } elseif ($u) {
                 users_db()->prepare('DELETE FROM users WHERE id = ?')->execute([$u['id']]);
+                passkeys_db()->prepare('DELETE FROM passkeys WHERE user_id = ?')->execute([$u['id']]);
                 $message = "Removed {$u['name']}. They can no longer sign in.";
             }
         }
@@ -551,7 +781,7 @@ if (isset($_GET['export'])) {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="guests.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['name', 'email', 'code', 'link', 'reply', 'responded_at', 'emailed_at', 'invited', 'coming', 'number_coming', 'dietary', 'updates'], ',', '"', '');
+    fputcsv($out, ['name', 'email', 'code', 'link', 'reply', 'responded_at', 'emailed_at', 'invited', 'coming', 'number_coming', 'dietary', 'updates', 'greeting'], ',', '"', '');
     foreach ($guests as $g) {
         $status = rsvp_status($g);
         $who = attendees($g);
@@ -561,7 +791,7 @@ if (isset($_GET['export'])) {
             $status === 'yes' ? csv_cell(implode(' / ', $who['names']) ?: 'party of ' . $who['count']) : '',
             $status === 'yes' ? ($who['known'] ? $who['count'] : '') : '',
             $status === 'yes' ? csv_cell(dietary_summary($g)) : '',
-            (int)$g['notify'] === 1 ? 'yes' : 'no'], ',', '"', '');
+            (int)$g['notify'] === 1 ? 'yes' : 'no', csv_cell(greeting_name($g))], ',', '"', '');
     }
     exit;
 }
@@ -577,25 +807,53 @@ foreach ($guests as $g) {
         $people += $who['count'];
         $peopleUnknown = $peopleUnknown || !$who['known'];
     }
-    if ($g['invited_at'] === null && valid_email($g['email'])) {
+    if ($g['invited_at'] === null && sendable_emails($g['email'])) {
         $unsent++;
     }
 }
 
 page_header('Admin', 'admin');
 ?>
+<?php
+$myPasskeys = count(user_passkeys((int)$me['id']));
+$myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') : OWNER_USERNAME;
+?>
 <header class="top wide">
   <span class="brand">Admin <span class="version">v<?= h(SITE_VERSION) ?></span></span>
   <nav class="top-links">
-    <span class="signed-in">Signed in as <?= h($me['name']) ?></span>
     <a class="link" href="/">View site</a>
-    <form method="post"><?= csrf_field() ?><button class="link" name="action" value="logout">Sign out</button></form>
+    <?php /* Account menu: a <details> so it works by keyboard and without JavaScript. */ ?>
+    <details class="account-menu">
+      <summary aria-label="Account: <?= h($me['name']) ?><?= $myPasskeys ? '' : ' (no passkey yet)' ?>">
+        <span class="avatar" aria-hidden="true"><?= h(initials($me['name'])) ?></span>
+        <?php if (!$myPasskeys): ?><span class="avatar-dot" aria-hidden="true"></span><?php endif; ?>
+      </summary>
+      <div class="account-panel">
+        <div class="account-who">
+          <span class="avatar large" aria-hidden="true"><?= h(initials($me['name'])) ?></span>
+          <div>
+            <strong><?= h($me['name']) ?></strong>
+            <span><?= is_owner() ? 'Owner' : 'Admin' ?> · <?= h($myUsername) ?></span>
+          </div>
+        </div>
+        <a class="account-item" href="/admin.php?tab=account" <?= $tab === 'account' ? 'aria-current="page"' : '' ?>>
+          <span>Sign-in and passkeys</span>
+          <small class="<?= $myPasskeys ? '' : 'nudge' ?>"><?= $myPasskeys
+              ? $myPasskeys . ' passkey' . ($myPasskeys === 1 ? '' : 's')
+              : 'No passkey yet: add one' ?></small>
+        </a>
+        <form method="post" class="account-signout">
+          <?= csrf_field() ?>
+          <button class="account-item" name="action" value="logout">Sign out</button>
+        </form>
+      </div>
+    </details>
   </nav>
 </header>
 
 <main class="content wide">
   <nav class="tabs" aria-label="Admin sections">
-    <?php foreach ($tabs as $key => $label): ?>
+    <?php foreach ($tabs as $key => $label): if ($key === 'account') continue;   // in the account menu instead ?>
       <a href="/admin.php?tab=<?= $key ?>" <?= $key === $tab ? 'aria-current="page"' : '' ?>><?= h($label) ?></a>
     <?php endforeach; ?>
   </nav>
@@ -639,14 +897,28 @@ page_header('Admin', 'admin');
     <?php endif; ?>
   </section>
 
-  <section class="card">
-    <h2>Add invitations</h2>
-    <form method="post">
-      <?= csrf_field() ?>
-      <label for="guests">One per line: <em>Name; email</em>. Email is optional. Each line gets its own code.</label>
-      <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Uncle Bob"></textarea>
-      <button type="submit" name="action" value="add">Add</button>
-    </form>
+  <section class="card collapsible" data-key="add-invitations">
+    <?= card_heading('Add invitations', 'add-invitations') ?>
+    <div class="card-body" id="add-invitations-body">
+      <form method="post">
+        <?= csrf_field() ?>
+        <label for="guests">One per line: <em>Name; email</em>. Email is optional, and a couple can have one each
+          (<em>Name; email; email</em>). Each line gets its own code.</label>
+        <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Ali &amp; Jo Khan; ali@example.com; jo@example.com&#10;Uncle Bob"></textarea>
+        <button type="submit" name="action" value="add">Add</button>
+      </form>
+      <form method="post" enctype="multipart/form-data" class="csv-upload">
+        <?= csrf_field() ?>
+        <label for="csv">Or upload a spreadsheet saved as CSV</label>
+        <p class="hint" id="csv-hint">One invitation per row: the name in the first column, then any email addresses in the
+          next columns. Headings like <em>Name</em>, <em>Email</em> and <em>Email 2</em> are fine, and other columns are ignored.
+          Names already on the list are skipped, so it's safe to upload an updated file.</p>
+        <div class="csv-row">
+          <input id="csv" type="file" name="csv" accept=".csv,text/csv" required aria-describedby="csv-hint">
+          <button type="submit" name="action" value="upload_csv">Upload</button>
+        </div>
+      </form>
+    </div>
   </section>
 
   <section class="card">
@@ -654,6 +926,17 @@ page_header('Admin', 'admin');
       <h2>Invitations (<?= count($guests) ?>)</h2>
       <a class="link" href="/admin.php?export=1">Download CSV</a>
     </div>
+    <form method="post" class="greeting-style">
+      <?= csrf_field() ?>
+      <label for="greet-style">Greet guests by</label>
+      <select id="greet-style" name="style" aria-describedby="greet-hint">
+        <option value="full" <?= site_greeting_style() === 'full' ? 'selected' : '' ?>>Full name (Sarah, Tom and Lily Jones)</option>
+        <option value="first" <?= site_greeting_style() === 'first' ? 'selected' : '' ?>>First names only (Sarah, Tom and Lily)</option>
+      </select>
+      <button type="submit" class="secondary" name="action" value="greeting_style">Save</button>
+      <p class="hint" id="greet-hint">Used for "Dear …" in emails and the welcome on their invitation page.
+        Surnames the site has found are in <strong>bold</strong>. Edit an invitation to change just that one.</p>
+    </form>
     <?php foreach ($guests as $g): if ($g['id'] != $editId) continue; ?>
       <form method="post" class="edit-guest" id="edit">
         <?= csrf_field() ?>
@@ -667,24 +950,63 @@ page_header('Admin', 'admin');
           Separate people with <code>&amp;</code>, <code>,</code> or <code>and</code>; add a plus-one with <code>+ guest</code>.
         </p>
         <label>Name<input type="text" name="name" value="<?= h($g['name']) ?>" required autofocus></label>
-        <label>Email<input type="email" name="email" value="<?= h($g['email']) ?>" placeholder="Optional"></label>
+        <label>Email<input type="text" name="email" value="<?= h($g['email']) ?>" placeholder="Optional"
+          inputmode="email" autocomplete="off" spellcheck="false" aria-describedby="email-hint"></label>
+        <p class="hint edit-email" id="email-hint">For two or more addresses, separate them with commas. Each gets its own copy.</p>
+        <label>Greet them by
+          <select name="greeting_style">
+            <option value="">Site choice (<?= site_greeting_style() === 'first' ? 'first names' : 'full name' ?>)</option>
+            <option value="full" <?= ($g['greeting_style'] ?? '') === 'full' ? 'selected' : '' ?>>Full name: <?= h($g['name']) ?></option>
+            <option value="first" <?= ($g['greeting_style'] ?? '') === 'first' ? 'selected' : '' ?>>First names: <?= h(first_names($g['name'])) ?></option>
+          </select></label>
+        <label>Or type the greeting<input type="text" name="greeting" value="<?= h((string)($g['greeting'] ?? '')) ?>" maxlength="120"
+          placeholder="<?= h(greeting_name(['greeting' => ''] + $g)) ?>" aria-describedby="greeting-hint"></label>
+        <p class="hint edit-email" id="greeting-hint">Shown as "Dear …" in emails and on their page. Leave empty to use the choice above.</p>
         <button type="submit" name="action" value="update">Save</button>
         <a class="link" href="/admin.php?tab=guests#guest-<?= (int)$g['id'] ?>">Cancel</a>
       </form>
     <?php endforeach; ?>
+    <?php if ($guests): ?>
+    <form method="post" id="bulk" class="bulk-bar">
+      <?= csrf_field() ?>
+      <span id="bulk-count" class="hint" aria-live="polite">Tick invitations to send or delete several at once.</span>
+      <span class="bulk-actions">
+      <button type="submit" class="bulk-send" name="action" value="send_selected"
+              data-confirm="Send the invitation to the ticked guests?">
+        <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>
+        </svg>
+        <span class="bulk-send-label">Send selected</span>
+      </button>
+      <button type="submit" class="bulk-delete" name="action" value="delete_selected"
+              data-confirm="Delete the ticked invitations? This can't be undone.">
+        <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>
+        </svg>
+        Delete selected
+      </button>
+      </span>
+    </form>
+    <?php endif; ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Code</th><th>Emailed</th><th>Reply</th><th>Dietary</th><th title="Whether they want update emails">Updates</th><th></th></tr></thead>
+        <thead><tr><th class="select-cell"><input type="checkbox" id="select-all" aria-label="Select all invitations" hidden></th><th>Name</th><th>Email</th><th>Code</th><th>Emailed</th><th>Reply</th><th>Dietary</th><th title="Whether they want update emails">Updates</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($guests as $g):
             $status = rsvp_status($g);
             $who = attendees($g);
             $invited = count(party_members($g['name'])); ?>
           <tr id="guest-<?= (int)$g['id'] ?>" <?= $g['id'] == $editId ? 'class="editing"' : '' ?>>
-            <td class="name-cell"><?= h($g['name']) ?></td>
+            <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="Select <?= h($g['name']) ?>"
+              data-sendable="<?= sendable_emails($g['email']) ? '1' : '0' ?>" data-sent="<?= $g['invited_at'] ? '1' : '0' ?>"></td>
+            <td class="name-cell"><?= name_html($g['name']) ?>
+              <?php if (greeting_name($g) !== $g['name']): ?><span class="greeted-as">Greeted as “<?= h(greeting_name($g)) ?>”</span><?php endif; ?></td>
             <td class="email-cell">
-              <?= h($g['email']) ?>
-              <?php if ((string)$g['email'] !== '' && !valid_email($g['email'])): ?><span class="pill no">Check address</span><?php endif; ?>
+              <?php foreach (email_list($g['email']) as $address): ?>
+                <span class="email-address"><?= h($address) ?><?php if (!valid_email($address)): ?> <span class="pill no">Check address</span><?php endif; ?></span>
+              <?php endforeach; ?>
             </td>
             <td>
               <code><?= h($g['code']) ?></code>
@@ -692,7 +1014,7 @@ page_header('Admin', 'admin');
             </td>
             <td>
               <?= $g['invited_at'] ? h(date('j M', strtotime($g['invited_at'] . ' UTC'))) : '—' ?>
-              <?php if (valid_email($g['email'])): ?>
+              <?php if (sendable_emails($g['email'])): ?>
                 <form method="post" class="inline"
                       <?= $g['invited_at'] ? 'data-confirm="Send ' . h($g['name']) . ' their invitation again?"' : '' ?>>
                   <?= csrf_field() ?>
@@ -711,7 +1033,7 @@ page_header('Admin', 'admin');
             </td>
             <td class="dietary-cell"><?= $status === 'yes' && dietary_summary($g) !== '' ? h(dietary_summary($g)) : '—' ?></td>
             <td>
-              <?php if (!valid_email($g['email'])): ?>—
+              <?php if (!sendable_emails($g['email'])): ?>—
               <?php elseif ((int)$g['notify'] === 1): ?><span class="pill yes" title="Happy to get update emails">On</span>
               <?php else: ?><span class="pill waiting" title="Opted out of update emails">Off</span>
               <?php endif; ?>
@@ -1214,7 +1536,8 @@ page_header('Admin', 'admin');
             <td><?= h($u['name']) ?></td>
             <td><code><?= h($u['username']) ?></code></td>
             <td class="email-cell"><?= $u['email'] ? h($u['email']) : '—' ?></td>
-            <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span></td>
+            <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span>
+              <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= $keys ?> passkey<?= $keys === 1 ? '' : 's' ?></span><?php endif; ?></td>
             <td><?= $u['last_login'] ? h(date('j M, H:i', strtotime($u['last_login'] . ' UTC'))) : '—' ?></td>
             <td class="row-actions">
               <a class="link small" href="/admin.php?tab=people&amp;edit_user=<?= (int)$u['id'] ?>#edit-user">Edit</a>
@@ -1224,7 +1547,7 @@ page_header('Admin', 'admin');
                 <button class="link small" name="action" value="user_reset">Email <?= $pending ? 'setup' : 'reset' ?> link</button>
               </form>
               <?php endif; ?>
-              <form method="post" class="inline" data-confirm="Create a new setup link for <?= h($u['name']) ?>? Their current password will stop working.">
+              <form method="post" class="inline" data-confirm="Create a new setup link for <?= h($u['name']) ?>? Their current password<?= user_passkeys((int)$u['id']) ? ' and passkeys' : '' ?> will stop working.">
                 <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                 <button class="link small" name="action" value="user_reset"><?= $pending ? 'New setup link' : 'Reset password' ?></button>
               </form>
@@ -1255,7 +1578,61 @@ page_header('Admin', 'admin');
     </form>
   </section>
 
+<?php elseif ($tab === 'account'): $mine = user_passkeys((int)$me['id']); $origin = passkey_origin(); ?>
+
+  <h2 class="page-title">Your sign-in</h2>
+  <section class="card">
+    <h2>Passkeys</h2>
+    <p class="hint">A passkey lets you sign in with Face ID, a fingerprint or your device's PIN instead of typing your
+      password, and it can't be stolen by a fake site. Once you've added one, <strong>you'll need it every time you sign in</strong>:
+      on its own, or after your password. Add one on each device you use, or use a password manager that syncs them.</p>
+    <?php if (is_owner() && PASSKEY_RECOVERY): ?>
+      <p class="notice" role="status">PASSKEY_RECOVERY is on in config.php, so the owner can sign in with just the password.
+        Once you've added a new passkey, set it back to <code>false</code>.</p>
+    <?php endif; ?>
+    <?php if ($mine): ?>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Passkey</th><th>Added</th><th>Last used</th><th></th></tr></thead>
+          <tbody>
+          <?php foreach ($mine as $p): ?>
+            <tr>
+              <td><?= h($p['name']) ?></td>
+              <td><?= h(date('j M Y', strtotime($p['created_at'] . ' UTC'))) ?></td>
+              <td><?= $p['last_used_at'] ? h(date('j M, H:i', strtotime($p['last_used_at'] . ' UTC'))) : '—' ?></td>
+              <td>
+                <form method="post" class="inline" data-confirm="Remove the passkey &quot;<?= h($p['name']) ?>&quot;?<?= count($mine) === 1 ? ' It\'s your only one, so you\'ll be able to sign in with just your password again.' : '' ?>">
+                  <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                  <button class="link small danger" name="action" value="passkey_remove">Remove</button>
+                </form>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php else: ?>
+      <p>You don't have a passkey yet, so you sign in with your password only.</p>
+    <?php endif; ?>
+
+    <?php if (!$origin): ?>
+      <p class="hint">Passkeys can only be added on the live site, <?= h(SITE_URL) ?>.</p>
+    <?php else: ?>
+      <form method="post" class="passkey-add">
+        <?= csrf_field() ?>
+        <label for="passkey-name">Name it, so you can tell your passkeys apart</label>
+        <div class="csv-row">
+          <input id="passkey-name" name="passkey_name" type="text" maxlength="60" value="<?= $mine ? '' : 'My phone' ?>" placeholder="e.g. Work laptop">
+          <button type="button" data-passkey="register" hidden>Add a passkey</button>
+        </div>
+        <p class="error" data-passkey-unsupported hidden>This browser can't create passkeys. Try Safari, Chrome, Edge or Firefox on an up-to-date device.</p>
+        <p class="error" role="alert" data-passkey-message hidden></p>
+      </form>
+    <?php endif; ?>
+  </section>
+
 <?php endif; ?>
 </main>
+<?php if ($tab === 'account'): ?><script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script><?php endif; ?>
 <script src="<?= h(asset_url('/assets/admin.js')) ?>"></script>
 <?php page_footer();

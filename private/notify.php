@@ -91,7 +91,7 @@ function audience_guests(string $audience): array
     ][$audience] ?? [];
     return array_values(array_filter(
         db()->query('SELECT * FROM guests WHERE notify = 1 ORDER BY name COLLATE NOCASE')->fetchAll(),
-        fn($g) => valid_email($g['email']) && in_array(rsvp_status($g), $statuses, true)
+        fn($g) => sendable_emails($g['email']) && in_array(rsvp_status($g), $statuses, true)
     ));
 }
 
@@ -114,10 +114,16 @@ function render_update(array $guest, string $subject, string $body, string $imag
     return [$subj, $text, $html, $headers];
 }
 
+// Sends the update to each of the guest's addresses; true only if every one went.
 function send_update(array $guest, string $subject, string $body): bool
 {
     [$subj, $text, $html, $headers] = render_update($guest, $subject, $body);
-    return send_email((string)$guest['email'], $guest['name'], $subj, $text, $html, mail_settings(), $headers);
+    $to = sendable_emails($guest['email']);
+    $sent = 0;
+    foreach ($to as $address) {
+        $sent += send_email($address, $guest['name'], $subj, $text, $html, mail_settings(), $headers) ? 1 : 0;
+    }
+    return $to && $sent === count($to);
 }
 
 function log_notification(string $subject, string $audience, int $sent, int $failed, string $by): void
