@@ -220,6 +220,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message .= ' These have an email address that looks wrong, so it won\'t be used: ' . implode(', ', $bad) . '.';
             }
         }
+    } elseif ($action === 'greeting_style') {
+        $style = input($_POST, 'style') === 'first' ? 'first' : 'full';
+        save_setting('greeting_style', $style);
+        $message = $style === 'first'
+            ? 'Guests are now greeted by first names only, unless you\'ve set something different for them.'
+            : 'Guests are now greeted by their full names, unless you\'ve set something different for them.';
     } elseif ($action === 'delete') {
         db()->prepare('DELETE FROM guests WHERE id = ?')->execute([(int)input($_POST, 'id')]);
         $message = 'Invitation deleted.';
@@ -316,6 +322,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int)input($_POST, 'id');
         $name = trim(input($_POST, 'name'));
         $email = clean_emails(input($_POST, 'email'));
+        $greetingStyle = in_array(input($_POST, 'greeting_style'), ['full', 'first'], true) ? input($_POST, 'greeting_style') : null;
+        preg_match('/^.{0,120}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'greeting'))), $m);   // one line, 120 characters
+        $greeting = trim($m[0] ?? '');
         $q = db()->prepare('SELECT * FROM guests WHERE id = ?');
         $q->execute([$id]);
         $g = $q->fetch();
@@ -326,8 +335,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // A new address hasn't been sent anything yet.
             $emailChanged = $email !== clean_emails((string)$g['email']);
-            db()->prepare('UPDATE guests SET name = ?, email = ?, invited_at = ? WHERE id = ?')
-                ->execute([$name, $email !== '' ? $email : null, $emailChanged ? null : $g['invited_at'], $id]);
+            db()->prepare('UPDATE guests SET name = ?, email = ?, invited_at = ?, greeting = ?, greeting_style = ? WHERE id = ?')
+                ->execute([$name, $email !== '' ? $email : null, $emailChanged ? null : $g['invited_at'],
+                    $greeting !== '' ? $greeting : null, $greetingStyle, $id]);
             $message = 'Saved changes to ' . $name . '.';
             if (has_bad_email($email)) {
                 $message .= sendable_emails($email)
@@ -619,7 +629,7 @@ if (isset($_GET['export'])) {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="guests.csv"');
     $out = fopen('php://output', 'w');
-    fputcsv($out, ['name', 'email', 'code', 'link', 'reply', 'responded_at', 'emailed_at', 'invited', 'coming', 'number_coming', 'dietary', 'updates'], ',', '"', '');
+    fputcsv($out, ['name', 'email', 'code', 'link', 'reply', 'responded_at', 'emailed_at', 'invited', 'coming', 'number_coming', 'dietary', 'updates', 'greeting'], ',', '"', '');
     foreach ($guests as $g) {
         $status = rsvp_status($g);
         $who = attendees($g);
@@ -629,7 +639,7 @@ if (isset($_GET['export'])) {
             $status === 'yes' ? csv_cell(implode(' / ', $who['names']) ?: 'party of ' . $who['count']) : '',
             $status === 'yes' ? ($who['known'] ? $who['count'] : '') : '',
             $status === 'yes' ? csv_cell(dietary_summary($g)) : '',
-            (int)$g['notify'] === 1 ? 'yes' : 'no'], ',', '"', '');
+            (int)$g['notify'] === 1 ? 'yes' : 'no', csv_cell(greeting_name($g))], ',', '"', '');
     }
     exit;
 }
@@ -734,6 +744,17 @@ page_header('Admin', 'admin');
       <h2>Invitations (<?= count($guests) ?>)</h2>
       <a class="link" href="/admin.php?export=1">Download CSV</a>
     </div>
+    <form method="post" class="greeting-style">
+      <?= csrf_field() ?>
+      <label for="greet-style">Greet guests by</label>
+      <select id="greet-style" name="style" aria-describedby="greet-hint">
+        <option value="full" <?= site_greeting_style() === 'full' ? 'selected' : '' ?>>Full name (Sarah, Tom and Lily Jones)</option>
+        <option value="first" <?= site_greeting_style() === 'first' ? 'selected' : '' ?>>First names only (Sarah, Tom and Lily)</option>
+      </select>
+      <button type="submit" class="secondary" name="action" value="greeting_style">Save</button>
+      <p class="hint" id="greet-hint">Used for "Dear …" in emails and the welcome on their invitation page.
+        Surnames the site has found are in <strong>bold</strong>. Edit an invitation to change just that one.</p>
+    </form>
     <?php foreach ($guests as $g): if ($g['id'] != $editId) continue; ?>
       <form method="post" class="edit-guest" id="edit">
         <?= csrf_field() ?>
@@ -750,6 +771,15 @@ page_header('Admin', 'admin');
         <label>Email<input type="text" name="email" value="<?= h($g['email']) ?>" placeholder="Optional"
           inputmode="email" autocomplete="off" spellcheck="false" aria-describedby="email-hint"></label>
         <p class="hint edit-email" id="email-hint">For two or more addresses, separate them with commas. Each gets its own copy.</p>
+        <label>Greet them by
+          <select name="greeting_style">
+            <option value="">Site choice (<?= site_greeting_style() === 'first' ? 'first names' : 'full name' ?>)</option>
+            <option value="full" <?= ($g['greeting_style'] ?? '') === 'full' ? 'selected' : '' ?>>Full name: <?= h($g['name']) ?></option>
+            <option value="first" <?= ($g['greeting_style'] ?? '') === 'first' ? 'selected' : '' ?>>First names: <?= h(first_names($g['name'])) ?></option>
+          </select></label>
+        <label>Or type the greeting<input type="text" name="greeting" value="<?= h((string)($g['greeting'] ?? '')) ?>" maxlength="120"
+          placeholder="<?= h(greeting_name(['greeting' => ''] + $g)) ?>" aria-describedby="greeting-hint"></label>
+        <p class="hint edit-email" id="greeting-hint">Shown as "Dear …" in emails and on their page. Leave empty to use the choice above.</p>
         <button type="submit" name="action" value="update">Save</button>
         <a class="link" href="/admin.php?tab=guests#guest-<?= (int)$g['id'] ?>">Cancel</a>
       </form>
@@ -789,7 +819,8 @@ page_header('Admin', 'admin');
           <tr id="guest-<?= (int)$g['id'] ?>" <?= $g['id'] == $editId ? 'class="editing"' : '' ?>>
             <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="Select <?= h($g['name']) ?>"
               data-sendable="<?= sendable_emails($g['email']) ? '1' : '0' ?>" data-sent="<?= $g['invited_at'] ? '1' : '0' ?>"></td>
-            <td class="name-cell"><?= h($g['name']) ?></td>
+            <td class="name-cell"><?= name_html($g['name']) ?>
+              <?php if (greeting_name($g) !== $g['name']): ?><span class="greeted-as">Greeted as “<?= h(greeting_name($g)) ?>”</span><?php endif; ?></td>
             <td class="email-cell">
               <?php foreach (email_list($g['email']) as $address): ?>
                 <span class="email-address"><?= h($address) ?><?php if (!valid_email($address)): ?> <span class="pill no">Check address</span><?php endif; ?></span>

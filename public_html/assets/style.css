@@ -293,7 +293,7 @@ button:disabled { opacity: 0.45; cursor: default; filter: none; }
 form.inline { display: inline; }
 tr.editing td { background: var(--bg); }
 .edit-guest { margin: 4px 0 16px; padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
-.edit-guest label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); flex: 1 1 200px; }
+.edit-guest label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); flex: 1 1 200px; min-width: 0; }
 .edit-guest input {
   padding: 8px 10px;
   font: 0.95rem var(--font);
@@ -329,6 +329,15 @@ button.bulk-send:disabled, button.bulk-delete:disabled { color: var(--muted); }
 th.select-cell, td.select-cell { width: 1%; padding-right: 0; }
 .select-cell input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 tr.selected td { background: var(--bg); }
+/* Names: the surname a first-names greeting would leave out, and the greeting when it differs. */
+.name-cell .surname { font-weight: 600; }
+.greeted-as { display: block; margin-top: 2px; font-size: 0.78rem; color: var(--muted); }
+.greeting-style { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 4px 0 14px; }
+.greeting-style label { font-size: 0.9rem; }
+.greeting-style select { padding: 7px 10px; font: 0.9rem var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; max-width: 100%; }
+.greeting-style button { padding: 7px 14px; font-size: 0.85rem; }
+.greeting-style .hint { flex: 1 1 100%; margin: 0; }
+.edit-guest select { width: 100%; min-width: 0; padding: 8px 10px; font: 0.95rem var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
 .email-address { display: block; }              /* one address per line when there are several */
 .edit-email { flex: 1 1 100%; margin: -4px 0 0; }
 /* Upload a CSV, under the "Add invitations" box. */

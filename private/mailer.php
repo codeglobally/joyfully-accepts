@@ -2,20 +2,6 @@
 // Invitation emails. The template lives in the settings table and is
 // filled in per guest; {name}, {link} and {code} are replaced.
 
-function setting(string $key, string $default = ''): string
-{
-    $q = db()->prepare('SELECT value FROM settings WHERE key = ?');
-    $q->execute([$key]);
-    $value = $q->fetchColumn();
-    return $value === false ? $default : $value;
-}
-
-function save_setting(string $key, string $value): void
-{
-    db()->prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
-        ->execute([$key, $value]);
-}
-
 function mail_settings(): array
 {
     $host = preg_replace('/^www\./', '', (string)parse_url(SITE_URL, PHP_URL_HOST));
@@ -97,7 +83,7 @@ function render_email(array $guest, string $subjectTemplate, string $bodyTemplat
         $imageSrc = '';   // no photo configured
     }
     $link = invite_link($guest['code']);
-    $vars = ['{name}' => $guest['name'], '{link}' => $link, '{code}' => $guest['code']];
+    $vars = ['{name}' => greeting_name($guest), '{link}' => $link, '{code}' => $guest['code']];
 
     $subject = str_replace(["\r", "\n"], ' ', strtr($settings['subject'], $vars));
     $text = strtr($settings['body'], $vars) . ($footerText !== '' ? "\n\n--\n" . $footerText : '');
@@ -115,7 +101,7 @@ function render_email(array $guest, string $subjectTemplate, string $bodyTemplat
     $body = '';
     foreach ($paragraphs as $para) {
         $body .= '<p style="margin:0 0 16px">' . nl2br(strtr(h($para), [
-            '{name}' => h($guest['name']),
+            '{name}' => h(greeting_name($guest)),
             '{code}' => $code,
             '{link}' => $button,
         ])) . '</p>';

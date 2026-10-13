@@ -123,7 +123,26 @@ function db(): PDO
     if (!in_array('notify', $columns, true)) {
         $pdo->exec('ALTER TABLE guests ADD COLUMN notify INTEGER NOT NULL DEFAULT 1');   // 0 = opted out of updates
     }
+    if (!in_array('greeting', $columns, true)) {
+        $pdo->exec('ALTER TABLE guests ADD COLUMN greeting TEXT');         // typed greeting, used as it is
+        $pdo->exec('ALTER TABLE guests ADD COLUMN greeting_style TEXT');   // 'full', 'first', or NULL for the site's choice
+    }
     return $pdo;
+}
+
+// Site-wide settings (email template, greeting style, cached photo colours).
+function setting(string $key, string $default = ''): string
+{
+    $q = db()->prepare('SELECT value FROM settings WHERE key = ?');
+    $q->execute([$key]);
+    $value = $q->fetchColumn();
+    return $value === false ? $default : $value;
+}
+
+function save_setting(string $key, string $value): void
+{
+    db()->prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+        ->execute([$key, $value]);
 }
 
 // Read a request value as a string. Anything else (e.g. an array sent as
@@ -257,6 +276,101 @@ function dietary_summary(array $guest): string
         }
     }
     return implode('; ', $items);
+}
+
+// --- Names and greetings --------------------------------------------
+// Each invitation has one name ("Sarah, Tom and Lily Jones"). Guests can be
+// greeted by that full name or by first names only ("Sarah, Tom and Lily"):
+// one choice for the whole site, which each invitation can override, or a
+// greeting typed in for that invitation.
+
+const NAME_SEPARATORS = '/(\s*(?:&|\+|,|\band\b|\bplus\b)\s*)/i';
+// Words before a name that aren't first names. A title keeps the surname
+// ("Mr Smith"); a relation is followed by a first name ("Uncle Bob").
+const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col';
+const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby';
+
+// One person's name split into [the rest, surname, whether a first-names
+// greeting may drop it], or null when there's no surname to find:
+//   "Lily Jones" -> ["Lily", "Jones", true]
+//   "Mr Smith"   -> ["Mr", "Smith", false]   (titles keep the surname)
+//   "Uncle Bob"  -> null                     (Bob is a first name)
+//   "Gran"       -> null
+function person_surname(string $person): ?array
+{
+    $words = preg_split('/\s+/', trim($person), -1, PREG_SPLIT_NO_EMPTY);
+    $titled = $words && preg_match('/^(' . NAME_TITLES . ')\.?$/i', $words[0]);
+    $first = $titled ? 1 : 0;
+    while ($first < count($words) - 1 && preg_match('/^(' . NAME_RELATIONS . ')$/i', $words[$first])) {
+        $first++;
+    }
+    if (count($words) - $first < ($titled ? 1 : 2)) {
+        return null;
+    }
+    // The last word, with any particles before it ("van der Berg", "de la Cruz", "Ó Briain").
+    $start = count($words) - 1;
+    while ($start - 1 > $first
+        && preg_match('/^(van|von|de|der|den|da|di|du|la|le|del|della|dos|das|st\.?|ter|ten|ó|o|ní|nic|mac|mc|ap|bin|bint|ibn|al|el)$/iu', $words[$start - 1])) {
+        $start--;
+    }
+    return [implode(' ', array_slice($words, 0, $start)), implode(' ', array_slice($words, $start)), !$titled];
+}
+
+// "The Smith Family" and similar are left exactly as written.
+function is_family_name(string $name): bool
+{
+    return (bool)preg_match('/\b(family|household|kids|children)\b/i', $name);
+}
+
+// The name with surnames taken off: "Sarah, Tom and Lily Jones" ->
+// "Sarah, Tom and Lily", "Ali Khan & Jo Smith" -> "Ali & Jo". Titles,
+// relations and family names stay as they are.
+function first_names(string $name): string
+{
+    if (is_family_name($name)) {
+        return trim($name);
+    }
+    $pieces = preg_split(NAME_SEPARATORS, trim($name), -1, PREG_SPLIT_DELIM_CAPTURE);
+    foreach ($pieces as $i => $piece) {
+        if ($i % 2 === 0 && ($split = person_surname($piece)) && $split[2]) {
+            $pieces[$i] = $split[0];
+        }
+    }
+    return implode('', $pieces);
+}
+
+// The name as HTML with each surname in bold, so the admin can see what a
+// first-names greeting would leave out.
+function name_html(string $name): string
+{
+    if (is_family_name($name)) {
+        return h($name);
+    }
+    $html = '';
+    foreach (preg_split(NAME_SEPARATORS, trim($name), -1, PREG_SPLIT_DELIM_CAPTURE) as $i => $piece) {
+        $split = $i % 2 === 0 ? person_surname($piece) : null;
+        $html .= $split
+            ? h($split[0]) . ($split[0] !== '' ? ' ' : '') . '<strong class="surname">' . h($split[1]) . '</strong>'
+            : h($piece);
+    }
+    return $html;
+}
+
+// The site-wide choice: 'full' (the default) or 'first'.
+function site_greeting_style(): string
+{
+    return setting('greeting_style', 'full') === 'first' ? 'first' : 'full';
+}
+
+// What to call a guest in emails ({name}) and on their invitation page.
+function greeting_name(array $guest): string
+{
+    $typed = trim((string)($guest['greeting'] ?? ''));
+    if ($typed !== '') {
+        return $typed;
+    }
+    $style = in_array($guest['greeting_style'] ?? '', ['full', 'first'], true) ? $guest['greeting_style'] : site_greeting_style();
+    return $style === 'first' ? first_names((string)$guest['name']) : (string)$guest['name'];
 }
 
 // Splits a line from "Add invitations" into [name, emails]. The addresses

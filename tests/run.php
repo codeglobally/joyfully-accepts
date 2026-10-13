@@ -59,6 +59,27 @@ same('commas in the name, two addresses', ['Sarah, Tom and Lily', 'sarah@example
 same('old comma style, two addresses', ['Mr & Mrs Smith', 'a@example.com, b@example.com'], split_guest_line('Mr & Mrs Smith, a@example.com, b@example.com'));
 same('non-address after a semicolon kept (so it gets flagged)', ['Bob', 'not-an-email'], split_guest_line('Bob; not-an-email'));
 
+section('Names and greetings');
+same('first names: one surname shared', 'Sarah, Tom and Lily', first_names('Sarah, Tom and Lily Jones'));
+same('first names: a surname each', 'Ali & Jo', first_names('Ali Khan & Jo Smith'));
+same('titles keep the surname', 'Mr & Mrs Smith', first_names('Mr & Mrs Smith'));
+same('relations are first names', 'Uncle Bob', first_names('Uncle Bob'));
+same('relation with a surname', 'Uncle Bob', first_names('Uncle Bob Jones'));
+same('family names left alone', 'The Okafor Family', first_names('The Okafor Family'));
+same('plus-one kept', 'Bob + guest', first_names('Bob Hope + guest'));
+same('surname particles', 'Anna', first_names('Anna van der Berg'));
+same('Irish surname', 'Seán', first_names('Seán Ó Briain'));
+same('single names unchanged', 'Gran', first_names('Gran'));
+same('surnames in bold', 'Ali <strong class="surname">Khan</strong> &amp; Jo <strong class="surname">Smith</strong>', name_html('Ali Khan & Jo Smith'));
+same('a title\'s surname is bold too', 'Mr &amp; Mrs <strong class="surname">Smith</strong>', name_html('Mr & Mrs Smith'));
+same('no bold without a surname', 'Uncle Bob', name_html('Uncle Bob'));
+check('names are escaped', strpos(name_html('<b>Bob</b> Jones'), '<b>') === false);
+same('greeting follows the site choice', 'Sarah Jones', greeting_name(['name' => 'Sarah Jones']));
+same('invitation can ask for first names', 'Sarah', greeting_name(['name' => 'Sarah Jones', 'greeting_style' => 'first']));
+same('a typed greeting wins', 'Granny Pat', greeting_name(['name' => 'Pat Jones', 'greeting_style' => 'first', 'greeting' => 'Granny Pat']));
+[, $mailText, $mailHtml] = render_invite(['name' => 'Sarah Jones', 'greeting_style' => 'first', 'code' => 'K7MPX4QR'], mail_settings());
+check('emails use the greeting for {name}', strpos($mailText, 'Dear Sarah,') === 0 && strpos($mailHtml, 'Dear Sarah,') !== false);
+
 section('Uploading a CSV');
 same('headings, two email columns, notes ignored', [['Ali & Jo Khan', 'ali@example.com, jo@example.com'], ['Uncle Bob', '']],
     parse_guest_csv("Name,Email,Email 2,Notes\nAli & Jo Khan,ali@example.com,jo@example.com,Vegan\nUncle Bob,,,\n"));
@@ -238,6 +259,23 @@ foreach ($argv as $arg) {
     $login = $get('/admin.php');
     $signedIn = $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
     check('owner can sign in', $signedIn['status'] === 302);
+
+    // Greetings: switch the site to first names, then give one invitation its own greeting.
+    $form = $get('/admin.php?tab=guests');
+    check('surnames shown in bold', strpos($form['body'], 'Sarah &amp; Tom <strong class="surname">Jones</strong>') !== false);
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'greeting_style', 'style' => 'first']);
+    check('guest page greets by first names', strpos($get('/guest.php')['body'], '<h1>Sarah &amp; Tom</h1>') !== false);
+    $jones = db()->prepare('SELECT id FROM guests WHERE code = ?');
+    $jones->execute([$code]);
+    $jones = $jones->fetchColumn();
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'update', 'id' => $jones, 'name' => 'Sarah & Tom Jones',
+        'email' => 'sarah@example.com', 'greeting_style' => '', 'greeting' => "The\nJoneses"]);
+    check('a typed greeting is used on their page', strpos($get('/guest.php')['body'], '<h1>The Joneses</h1>') !== false);
+    check('admin shows who is greeted differently', strpos($get('/admin.php?tab=guests')['body'], 'Greeted as “The Joneses”') !== false);
+    $form = $get('/admin.php?tab=guests');
+    $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'greeting_style', 'style' => 'full']);
+    check('greeting choice saved site-wide', site_greeting_style() === 'full');
     $csvFile = tempnam(sys_get_temp_dir(), 'csv');
     file_put_contents($csvFile, "Name,Email,Email 2\nAli & Jo Khan,ali@example.com,jo@example.com\nUncle Ken,ken@example.com,\n");
     $upload = function () use ($get, $csrf, $csvFile) {

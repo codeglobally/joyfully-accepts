@@ -115,7 +115,7 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg guest-page' : 'guest-page');
 <main class="content">
   <section class="hero">
     <p class="eyebrow">Welcome</p>
-    <h1><?= h($guest['name']) ?></h1>
+    <h1><?= h(greeting_name($guest)) ?></h1>
     <p class="date"><?= h(WEDDING_DATE) ?><br><?= place_html() ?></p>
     <?php if (wedding_day()): ?>
     <details class="add-cal">
