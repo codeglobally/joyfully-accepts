@@ -108,7 +108,7 @@ button:focus-visible, a.button:focus-visible { outline: 2px solid var(--ink); ou
   cursor: pointer;
 }
 .link:hover { text-decoration: underline; filter: none; }
-.link.small { font-size: 0.8rem; margin-left: 8px; }
+.link.small { font-size: 0.8rem; margin-inline-start: 8px; }
 .link.danger { color: var(--error); }
 
 .error { color: var(--error); margin: 0; font-size: 0.95rem; }
@@ -184,7 +184,8 @@ legend { margin-bottom: 12px; }
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 3px 3px 3px 10px;
+  padding-block: 3px;
+  padding-inline: 10px 3px;
   font-size: 0.875rem;
   line-height: 1.4;
   color: var(--chip-ink);
@@ -326,7 +327,7 @@ button.bulk-send, button.bulk-delete {
 button.bulk-send { color: var(--accent); }
 button.bulk-delete { color: var(--error); }
 button.bulk-send:disabled, button.bulk-delete:disabled { color: var(--muted); }
-th.select-cell, td.select-cell { width: 1%; padding-right: 0; }
+th.select-cell, td.select-cell { width: 1%; padding-inline-end: 0; }
 .select-cell input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 tr.selected td { background: var(--bg); }
 /* Names: the surname a first-names greeting would leave out, and the greeting when it differs. */
@@ -351,7 +352,7 @@ tr.selected td { background: var(--bg); }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-th, td { text-align: left; padding: 10px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
+th, td { text-align: start; padding: 10px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 500; border-top: 0; }
 td form { margin: 0; }
 code { font-size: 0.95rem; letter-spacing: 0.08em; }
@@ -508,7 +509,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .section-preview { margin-bottom: 20px; }
 .section-preview .card { margin: 6px 0 0; }
 .row-actions { white-space: nowrap; }
-.row-actions .inline { margin-left: 4px; }
+.row-actions .inline { margin-inline-start: 4px; }
 button.link:disabled { opacity: 0.3; }
 .add-section { margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .chip-link {
@@ -525,14 +526,14 @@ button.link:disabled { opacity: 0.3; }
 /* --- Formatted section text (guest page and preview) --- */
 .rich h3 { margin: 20px 0 4px; font-size: 1.1rem; font-weight: 500; }
 .rich h2 + h3 { margin-top: 4px; }
-.rich ul { margin: 0 0 16px; padding-left: 20px; }
+.rich ul { margin: 0 0 16px; padding-inline-start: 20px; }
 .rich li { margin-bottom: 4px; }
 .rich p { margin: 0 0 14px; }
 
 /* Admin sign-in and setup fields are normal text, not invite-code style. */
-body.admin .code-box input { letter-spacing: normal; text-transform: none; font-size: 1.05rem; padding: 12px 14px; text-align: left; }
-body.admin .code-box label { text-align: left; }
-body.admin .code-box p { margin: 0; text-align: left; }
+body.admin .code-box input { letter-spacing: normal; text-transform: none; font-size: 1.05rem; padding: 12px 14px; text-align: start; }
+body.admin .code-box label { text-align: start; }
+body.admin .code-box p { margin: 0; text-align: start; }
 body.admin .code-box .forgot { margin: -4px 0 0; text-align: center; font-size: 0.85rem; }
 body.admin .code-box .forgot a, body.admin .code-box .hint code { color: var(--muted); }
 .pill.maybe { background: #fef3c7; color: #92400e; }
@@ -597,7 +598,7 @@ td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted
   padding: 0;
   font: inherit;
   letter-spacing: inherit;
-  text-align: left;
+  text-align: start;
   color: inherit;
   background: none;
   border: 0;
@@ -620,11 +621,11 @@ td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted
 .donut-number { font: 300 34px var(--font); fill: var(--ink); }
 .donut-caption { font: 12px var(--font); fill: var(--muted); }
 .diet-legend { width: auto; flex: 1 1 280px; max-width: 460px; font-size: 0.9rem; }
-.diet-legend td:nth-child(n+2), .diet-legend th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+.diet-legend td:nth-child(n+2), .diet-legend th:nth-child(n+2) { text-align: end; font-variant-numeric: tabular-nums; }
 .diet-legend tr { transition: opacity 0.15s; }
 .diet-chart .dim { opacity: 0.35; }
 .diet-legend tr.hl td { font-weight: 500; }
-.swatch { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border-radius: 3px; vertical-align: -1px; }
+.swatch { display: inline-block; width: 12px; height: 12px; margin-inline-end: 8px; border-radius: 3px; vertical-align: -1px; }
 .swatch-0 { background: #2a78d6; } .swatch-1 { background: #eb6834; } .swatch-2 { background: #1baf7a; }
 .swatch-3 { background: #eda100; } .swatch-4 { background: #e87ba4; } .swatch-other { background: #a8a6a0; }
 .diet-summary .hint { margin: 16px 0 0; }
@@ -632,7 +633,7 @@ td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted
 
 /* Guest feedback box */
 .feedback-box { margin: 4px 0 20px; text-align: center; }
-.feedback-box details { text-align: left; }
+.feedback-box details { text-align: start; }
 .feedback-button {
   display: inline-block;
   padding: 10px 20px;
@@ -647,7 +648,7 @@ td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted
 .feedback-button::-webkit-details-marker { display: none; }
 .feedback-box details[open] .feedback-button { margin-bottom: 12px; }
 .feedback-box details { text-align: center; }
-.feedback-form { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.feedback-form { text-align: start; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 .feedback-form label { display: block; font-size: 0.9rem; color: var(--muted); }
 .feedback-form textarea { background: var(--card); }
 .feedback-box .notice { margin-top: 12px; }
@@ -673,12 +674,12 @@ td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted
 .funnel-bar { width: 100%; height: 18px; }
 .funnel-bar .track { fill: var(--bg); }
 .funnel-bar .fill { fill: #2a78d6; }
-.funnel-value { text-align: right; font-variant-numeric: tabular-nums; }
-.funnel-value small { color: var(--muted); margin-left: 4px; }
+.funnel-value { text-align: end; font-variant-numeric: tabular-nums; }
+.funnel-value small { color: var(--muted); margin-inline-start: 4px; }
 @media (max-width: 520px) { .funnel-row { grid-template-columns: 1fr 70px; } .funnel-bar { grid-column: 1 / -1; grid-row: 2; } }
 .insight-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 20px; }
 .insight-lists .card { margin-bottom: 12px; }
-.card h2 .count { font-size: 0.9rem; color: var(--muted); margin-left: 6px; }
+.card h2 .count { font-size: 0.9rem; color: var(--muted); margin-inline-start: 6px; }
 .people-list { list-style: none; margin: 0; padding: 0; }
 .people-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
 .people-list .hint { margin: 0; white-space: nowrap; }
@@ -697,13 +698,13 @@ h3.sub { font-size: 1.05rem; font-weight: 500; margin: 20px 0 8px; }
 .timeline .send { stroke: #a8a6a0; stroke-width: 1.5; stroke-dasharray: 3 3; }
 .timeline .hover { fill: transparent; }
 .timeline .hover:hover { fill: rgba(42, 120, 214, 0.08); }
-.key-line, .key-send { display: inline-block; width: 18px; vertical-align: middle; margin-right: 4px; }
+.key-line, .key-send { display: inline-block; width: 18px; vertical-align: middle; margin-inline-end: 4px; }
 .key-line { border-top: 2px solid #2a78d6; }
 .key-send { border-top: 2px dashed #a8a6a0; }
 .timeline-table summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
 
 /* "Add to calendar" under the date on the guest page */
-.add-cal { display: inline-block; position: relative; margin-top: 14px; text-align: left; }
+.add-cal { display: inline-block; position: relative; margin-top: 14px; text-align: start; }
 .add-cal summary {
   display: inline-flex;
   align-items: center;
@@ -883,11 +884,11 @@ body.photo-bg::after {
 .avatar.large { width: 44px; height: 44px; font-size: 1rem; }
 .account-menu[open] summary .avatar { box-shadow: 0 0 0 3px var(--line); }
 .avatar-dot {
-  position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%;
+  position: absolute; top: -2px; inset-inline-end: -2px; width: 11px; height: 11px; border-radius: 50%;
   background: var(--error); border: 2px solid var(--bg);
 }
 .account-panel {
-  position: absolute; right: 0; top: calc(100% + 10px); z-index: 30;
+  position: absolute; inset-inline-end: 0; top: calc(100% + 10px); z-index: 30;
   width: 280px; max-width: calc(100vw - 32px); padding: 6px;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
@@ -898,7 +899,7 @@ body.photo-bg::after {
 .account-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
   padding: 9px 10px; border: 0; border-radius: 8px; background: none;
-  color: var(--ink); font: 0.95rem var(--font); text-align: left; text-decoration: none; cursor: pointer;
+  color: var(--ink); font: 0.95rem var(--font); text-align: start; text-decoration: none; cursor: pointer;
 }
 .account-item:hover, .account-item:focus-visible { background: var(--bg); filter: none; }
 .account-item[aria-current="page"] span { font-weight: 600; }
@@ -926,3 +927,49 @@ body.photo-bg::after {
 }
 @media (prefers-reduced-motion: reduce) { .card.nudge { animation: none; } }
 .hint-inline { font-size: 0.8rem; color: var(--muted); }
+
+/* --- Languages -------------------------------------------------------
+   Layout uses start/end rather than left/right, so right-to-left pages
+   (Arabic) mirror by themselves. The photo, its caption and hidden links
+   stay where they are: only the text in the panel flips. */
+
+/* Arabic: a proper Arabic system font (Latin names and addresses keep
+   Helvetica), about 15% larger with more line spacing so the dots and vowel
+   marks have room, and no letter spacing, which would break the joined-up
+   script. Nothing smaller than about 14px. */
+html[lang="ar"] {
+  font-size: 115%;
+  --font: 'Helvetica Neue', Helvetica, Arial, 'SF Arabic', 'Geeza Pro', 'Segoe UI', 'Noto Naskh Arabic', 'Noto Sans Arabic', Tahoma, sans-serif;
+}
+html[lang="ar"] body { font: 18.4px/1.75 var(--font); }
+html[lang="ar"] *:not(input):not(code) { letter-spacing: normal !important; }
+html[lang="ar"] .site-footer { font-size: 0.8rem; }
+
+/* Chinese: the system font for each written form, and a little more line
+   spacing. */
+html[lang="zh-Hans"] { --font: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', sans-serif; }
+html[lang="zh-Hant"] { --font: 'Helvetica Neue', Helvetica, Arial, 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans CJK TC', 'Noto Sans TC', sans-serif; }
+html[lang^="zh"] body { line-height: 1.75; }
+html[lang^="zh"] .eyebrow { letter-spacing: 0.1em; }
+
+/* Arabic and Chinese fonts have no italics (browsers fake them by slanting),
+   so emphasis is shown with weight instead. */
+html[lang="ar"] em, html[lang="ar"] i, html[lang^="zh"] em, html[lang^="zh"] i { font-style: normal; font-weight: 600; }
+html[lang="ar"] .not-found .quip, html[lang^="zh"] .not-found .quip { font-style: normal; }
+
+/* The language menu at the bottom of guest pages. */
+.language-menu { margin: 10px auto 0; text-align: center; font-size: 0.8rem; }
+.language-menu summary {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px;
+  color: var(--muted); cursor: pointer; list-style: none;
+}
+.language-menu summary::-webkit-details-marker { display: none; }
+.language-menu summary:hover, .language-menu[open] summary { color: var(--accent); }
+.language-menu summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.language-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 8px 0 0; }
+.language-list button {
+  padding: 6px 12px; font-size: 0.9rem; font-weight: 400; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+}
+.language-list button[aria-current="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.language-list button:hover { filter: none; border-color: var(--accent); }
