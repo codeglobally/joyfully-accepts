@@ -225,6 +225,23 @@ users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, 
 same('opted-in people who can sign in, one email per address', ['couple@example.com', 'pat@example.com'],
     array_column(feedback_recipients(), 'email'));
 check('owner contact saved', admin_contact(0) === ['email' => 'couple@example.com', 'notify' => true]);
+same('each recipient in their own language: the site\'s by default', ['en', 'en'], array_column(feedback_recipients(), 'language'));
+$patId = (int)users_db()->query("SELECT id FROM users WHERE username = 'pat'")->fetchColumn();
+save_admin_language($patId, 'de');
+save_admin_language(0, 'xx');
+same('...or the one they chose (unknown ones ignored)', ['en', 'de'], array_column(feedback_recipients(), 'language'));
+[$fbSubject, $fbText, $fbHtml] = in_language('de', fn() => render_feedback_notice('Léa', 'Hallo!', false));
+check('feedback notice in German', $fbSubject === 'Neue Nachricht von Léa' && strpos($fbText, 'keine E-Mail-Adresse') !== false
+    && strpos($fbHtml, '<strong>Léa</strong> hat Ihnen') !== false && strpos($fbHtml, 'lang="de"') !== false);
+$fbAr = in_language('ar', fn() => render_feedback_notice('<b>x</b>', 'hi', true))[2];
+check('feedback notice in Arabic is right-to-left and escaped', strpos($fbAr, 'dir="rtl"') !== false && strpos($fbAr, '<b>x</b>') === false
+    && strpos($fbAr, 'border-right') !== false);
+[$suSubject, $suText, $suHtml] = in_language('ar', fn() => render_setup_email(['name' => 'Pat', 'username' => 'pat'], 'https://example.com/x', true));
+check('reset email in Arabic, with the plural for 7 days', strpos($suText, 'خلال 7 أيام') !== false && strpos($suHtml, 'إعادة تعيين كلمة المرور') !== false);
+$suEn = in_language('en', fn() => render_setup_email(['name' => 'Pat', 'username' => 'pat'], 'https://example.com/x', false));
+check('setup email in English', $suEn[0] === 'Your ' . COUPLE_NAMES . ' admin link' && strpos($suEn[1], 'expires in 7 days') !== false
+    && strpos($suEn[2], 'Set up sign-in') !== false);
+save_admin_language($patId, '');
 users_db()->exec("DELETE FROM users WHERE username IN ('pat', 'kim', 'new', 'same')");
 save_admin_contact(0, '', false);
 

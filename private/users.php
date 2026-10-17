@@ -243,24 +243,29 @@ function send_setup_email(array $user, string $url, bool $reset): bool
     if (!valid_email($user['email'] ?? null)) {
         return false;
     }
-    $what = $reset ? 'reset your password' : 'set up your sign-in';
-    $subject = 'Your ' . COUPLE_NAMES . ' admin link';
-    $text = "Hi {$user['name']},\n\n"
-        . "Use this link to $what for the wedding website admin:\n\n$url\n\n"
-        . "Your username is: {$user['username']}\n\n"
-        . 'The link works once and expires in ' . SETUP_LINK_DAYS . " days. If you didn't ask for this, you can ignore this email.\n";
-    $font = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-    $html = '<!doctype html><html><body style="margin:0;padding:24px 12px;background:#f4f4f5">'
-        . '<div style="max-width:520px;margin:0 auto;padding:28px;background:#ffffff;border-radius:12px;font:16px/1.6 ' . $font . ';color:#18181b">'
-        . '<p style="margin:0 0 16px">Hi ' . h($user['name']) . ',</p>'
-        . '<p style="margin:0 0 20px">Use this button to ' . $what . ' for the wedding website admin.</p>'
-        . '<p style="margin:0 0 20px"><a href="' . h($url) . '" style="display:inline-block;padding:13px 26px;background:#52525b;'
-        . 'color:#ffffff;text-decoration:none;border-radius:8px;font-weight:500">' . ($reset ? 'Reset password' : 'Set up sign-in') . '</a></p>'
-        . '<p style="margin:0 0 16px">Your username is <strong>' . h($user['username']) . '</strong>.</p>'
-        . '<p style="margin:0;font-size:13px;color:#6b6b73">The link works once and expires in ' . SETUP_LINK_DAYS
-        . " days. If you didn't ask for this, you can ignore this email.</p>"
-        . '</div></body></html>';
+    $language = valid_language($user['language'] ?? null) ? $user['language'] : site_language();
+    [$subject, $text, $html] = in_language($language, fn() => render_setup_email($user, $url, $reset));
     return send_email($user['email'], $user['name'], $subject, $text, $html, mail_settings());
+}
+
+// The setup or reset email in the current language: [subject, text, html].
+function render_setup_email(array $user, string $url, bool $reset): array
+{
+    $subject = t('admin_mail.link_subject', ['couple' => COUPLE_NAMES]);
+    $expires = t('admin_mail.expires', ['count' => SETUP_LINK_DAYS]) . ' ' . t('admin_mail.ignore');
+    $text = t('admin_mail.hi', ['name' => $user['name']]) . "\n\n"
+        . t($reset ? 'admin_mail.reset_text' : 'admin_mail.setup_text') . "\n\n$url\n\n"
+        . t('admin_mail.username', ['username' => $user['username']]) . "\n\n" . $expires . "\n";
+    $html = '<!doctype html><html lang="' . h(current_language()) . '" dir="' . (is_rtl() ? 'rtl' : 'ltr') . '"><body style="margin:0;padding:24px 12px;background:#f4f4f5">'
+        . '<div style="max-width:520px;margin:0 auto;padding:28px;background:#ffffff;border-radius:12px;font:16px/1.6 ' . email_font() . ';color:#18181b">'
+        . '<p style="margin:0 0 16px">' . th('admin_mail.hi', ['name' => $user['name']]) . '</p>'
+        . '<p style="margin:0 0 20px">' . th($reset ? 'admin_mail.reset_html' : 'admin_mail.setup_html') . '</p>'
+        . '<p style="margin:0 0 20px"><a href="' . h($url) . '" style="display:inline-block;padding:13px 26px;background:#52525b;'
+        . 'color:#ffffff;text-decoration:none;border-radius:8px;font-weight:500">' . th($reset ? 'admin_mail.reset_button' : 'admin_mail.setup_button') . '</a></p>'
+        . '<p style="margin:0 0 16px">' . t_html('admin_mail.username', ['username' => '<strong dir="ltr">' . h($user['username']) . '</strong>']) . '</p>'
+        . '<p style="margin:0;font-size:13px;color:#6b6b73">' . h($expires) . '</p>'
+        . '</div></body></html>';
+    return [$subject, $text, $html];
 }
 
 
@@ -293,19 +298,42 @@ function save_admin_contact(int $id, string $email, bool $notify): void
         ->execute([$email !== '' ? $email : null, $notify ? 1 : 0, $id]);
 }
 
-// Who to email when a guest sends a message: [['name' => …, 'email' => …], …].
+// An admin's language (0 = the owner): what they chose, or the site's.
+function admin_language(int $id): string
+{
+    if ($id === 0) {
+        $code = setting('owner_language');
+    } else {
+        $q = users_db()->prepare('SELECT language FROM users WHERE id = ?');
+        $q->execute([$id]);
+        $code = $q->fetchColumn();
+    }
+    return valid_language(is_string($code) ? $code : null) ? $code : site_language();
+}
+
+function save_admin_language(int $id, string $code): void
+{
+    $code = valid_language($code) ? $code : '';
+    if ($id === 0) {
+        save_setting('owner_language', $code);
+        return;
+    }
+    users_db()->prepare('UPDATE users SET language = ? WHERE id = ?')->execute([$code !== '' ? $code : null, $id]);
+}
+
+// Who to email when a guest sends a message: [['name' => …, 'email' => …, 'language' => …], …].
 // Only people who can still sign in, have opted in and have a valid address.
 function feedback_recipients(): array
 {
     $people = [];
     $owner = admin_contact(0);
     if ($owner['notify'] && valid_email($owner['email'])) {
-        $people[] = ['name' => COUPLE_NAMES, 'email' => $owner['email']];
+        $people[] = ['name' => COUPLE_NAMES, 'email' => $owner['email'], 'language' => admin_language(0)];
     }
-    $q = users_db()->query('SELECT name, email FROM users WHERE notify_feedback = 1 AND password_hash IS NOT NULL');
+    $q = users_db()->query('SELECT id, name, email FROM users WHERE notify_feedback = 1 AND password_hash IS NOT NULL');
     foreach ($q->fetchAll() as $u) {
         if (valid_email($u['email'])) {
-            $people[] = ['name' => $u['name'], 'email' => $u['email']];
+            $people[] = ['name' => $u['name'], 'email' => $u['email'], 'language' => admin_language((int)$u['id'])];
         }
     }
     // One email per address, even if two people share one.

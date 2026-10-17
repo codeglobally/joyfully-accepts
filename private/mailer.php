@@ -68,6 +68,18 @@ function render_invite(array $guest, array $settings, string $imageSrc = 'cid:' 
     return render_email($guest, $settings['subject'], $settings['body'], $imageSrc, h(tagline()));
 }
 
+// The font stack for an email in the current language. Latin text keeps
+// Helvetica; Arabic and Chinese fall through to their own fonts.
+function email_font(): string
+{
+    $scriptFonts = [
+        'ar' => "'SF Arabic','Geeza Pro','Segoe UI',Tahoma,",
+        'zh-Hans' => "'PingFang SC','Microsoft YaHei',",
+        'zh-Hant' => "'PingFang TC','Microsoft JhengHei',",
+    ];
+    return "'Helvetica Neue',Helvetica,Arial," . ($scriptFonts[current_language()] ?? '') . 'sans-serif';
+}
+
 // The branded email used for invitations and updates. $eyebrow is the small
 // heading above the names (already HTML). $footerHtml / $footerText are
 // added at the bottom, e.g. an unsubscribe link.
@@ -90,13 +102,7 @@ function render_email(array $guest, string $subjectTemplate, string $bodyTemplat
     $subject = str_replace(["\r", "\n"], ' ', strtr($settings['subject'], $vars));
     $text = strtr($settings['body'], $vars) . ($footerText !== '' ? "\n\n--\n" . $footerText : '');
 
-    // Latin text keeps Helvetica; Arabic and Chinese fall through to their own fonts.
-    $scriptFonts = [
-        'ar' => "'SF Arabic','Geeza Pro','Segoe UI',Tahoma,",
-        'zh-Hans' => "'PingFang SC','Microsoft YaHei',",
-        'zh-Hant' => "'PingFang TC','Microsoft JhengHei',",
-    ];
-    $font = "'Helvetica Neue',Helvetica,Arial," . ($scriptFonts[current_language()] ?? '') . 'sans-serif';
+    $font = email_font();
     $button = '</p><table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px">'
         . '<tr><td style="background:#c2410c;border-radius:8px">'
         . '<a href="' . h($link) . '" style="display:inline-block;padding:15px 32px;font:500 16px ' . $font
@@ -250,28 +256,35 @@ function send_feedback_notice(array $guest, string $message): int
     }
     $guestEmail = sendable_emails($guest['email'] ?? null)[0] ?? '';
     $settings['reply_to'] = $guestEmail;
-    $from = (string)$guest['name'];
-    $inbox = SITE_URL . '/admin.php?tab=feedback';
-    $account = SITE_URL . '/admin.php?tab=account';
-    $subject = 'New message from ' . $from;
-    $replyNote = $guestEmail !== '' ? 'Reply to this email to answer them directly.' : 'Their invitation has no email address, so you can\'t reply by email.';
-    $text = "$from sent a message through your wedding website:\n\n" . $message . "\n\n"
-        . "$replyNote\nSee all messages: $inbox\n\n--\n"
-        . "You're getting this because you turned on feedback emails. Turn them off: $account";
-    $font = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-    $html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' . h($subject) . '</title></head>'
-        . '<body style="margin:0;padding:24px;background:#faf7f4;font:16px/1.5 ' . $font . ';color:#2a211c">'
-        . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #eadfd6;border-radius:12px;padding:24px">'
-        . '<p style="margin:0 0 12px;color:#8a6552;font-size:13px;letter-spacing:0.12em;text-transform:uppercase">New message</p>'
-        . '<p style="margin:0 0 16px"><strong>' . h($from) . '</strong> sent a message through your wedding website:</p>'
-        . '<blockquote style="margin:0 0 20px;padding:12px 16px;background:#fff7f1;border-left:3px solid #c2410c;border-radius:4px">'
-        . nl2br(h($message)) . '</blockquote>'
-        . '<p style="margin:0 0 16px">' . h($replyNote) . ' <a href="' . h($inbox) . '" style="color:#c2410c">See all messages</a></p>'
-        . '<p style="margin:24px 0 0;font-size:13px;color:#8a6552">You&rsquo;re getting this because you turned on feedback emails. '
-        . '<a href="' . h($account) . '" style="color:#8a6552">Turn them off</a></p></div></body></html>';
     $sent = 0;
     foreach (feedback_recipients() as $person) {
+        [$subject, $text, $html] = in_language($person['language'],
+            fn() => render_feedback_notice((string)$guest['name'], $message, $guestEmail !== ''));
         $sent += send_email($person['email'], $person['name'], $subject, $text, $html, $settings) ? 1 : 0;
     }
     return $sent;
+}
+
+// The feedback notice in the current language: [subject, text, html].
+function render_feedback_notice(string $from, string $message, bool $canReply): array
+{
+    $inbox = SITE_URL . '/admin.php?tab=feedback';
+    $account = SITE_URL . '/admin.php?tab=account';
+    $subject = t('admin_mail.feedback_subject', ['name' => $from]);
+    $replyNote = t($canReply ? 'admin_mail.reply_direct' : 'admin_mail.no_reply');
+    $text = t('admin_mail.feedback_intro', ['name' => $from]) . "\n\n" . $message . "\n\n"
+        . "$replyNote\n" . t('admin_mail.see_all') . ": $inbox\n\n--\n"
+        . t('admin_mail.feedback_reason') . ' ' . t('admin_mail.turn_off') . ": $account";
+    $rtl = is_rtl();
+    $html = '<!doctype html><html lang="' . h(current_language()) . '" dir="' . ($rtl ? 'rtl' : 'ltr') . '"><head><meta charset="utf-8"><title>' . h($subject) . '</title></head>'
+        . '<body style="margin:0;padding:24px;background:#faf7f4;font:16px/1.5 ' . email_font() . ';color:#2a211c">'
+        . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #eadfd6;border-radius:12px;padding:24px">'
+        . '<p style="margin:0 0 12px;color:#8a6552;font-size:13px;' . ($rtl ? '' : 'letter-spacing:0.12em;text-transform:uppercase') . '">' . th('admin_mail.feedback_eyebrow') . '</p>'
+        . '<p style="margin:0 0 16px">' . t_html('admin_mail.feedback_intro', ['name' => '<strong>' . h($from) . '</strong>']) . '</p>'
+        . '<blockquote style="margin:0 0 20px;padding:12px 16px;background:#fff7f1;border-' . ($rtl ? 'right' : 'left') . ':3px solid #c2410c;border-radius:4px" dir="auto">'
+        . nl2br(h($message)) . '</blockquote>'
+        . '<p style="margin:0 0 16px">' . h($replyNote) . ' <a href="' . h($inbox) . '" style="color:#c2410c">' . th('admin_mail.see_all') . '</a></p>'
+        . '<p style="margin:24px 0 0;font-size:13px;color:#8a6552">' . th('admin_mail.feedback_reason') . ' '
+        . '<a href="' . h($account) . '" style="color:#8a6552">' . th('admin_mail.turn_off') . '</a></p></div></body></html>';
+    return [$subject, $text, $html];
 }
