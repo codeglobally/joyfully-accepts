@@ -260,6 +260,86 @@ check('SITE_VERSION is MAJOR.MINOR.PATCH', (bool)preg_match('/^\d+\.\d+\.\d+$/',
 check('README badge matches SITE_VERSION', strpos((string)file_get_contents(dirname(__DIR__) . '/README.md'), 'badge/version-' . SITE_VERSION . '-') !== false);
 check('CHANGELOG has this version', strpos((string)file_get_contents(dirname(__DIR__) . '/CHANGELOG.md'), '## ' . SITE_VERSION . "\n") !== false);
 
+section('Languages');
+same('browser: first choice offered', 'fr', negotiate_language('fr-CA,fr;q=0.9,en;q=0.8', array_keys(LANGUAGE_NAMES)));
+same('browser: q values win over order', 'de', negotiate_language('en;q=0.5,de;q=0.9', array_keys(LANGUAGE_NAMES)));
+same('browser: skips languages not offered', 'en', negotiate_language('pt-BR,pt;q=0.9,en;q=0.5', array_keys(LANGUAGE_NAMES)));
+same('browser: nothing offered', null, negotiate_language('pt-BR,ja', array_keys(LANGUAGE_NAMES)));
+same('browser: Taiwan reads Traditional', 'zh-Hant', negotiate_language('zh-TW,zh;q=0.9', array_keys(LANGUAGE_NAMES)));
+same('browser: Hong Kong reads Traditional', 'zh-Hant', negotiate_language('zh-HK', array_keys(LANGUAGE_NAMES)));
+same('browser: mainland reads Simplified', 'zh-Hans', negotiate_language('zh-CN,zh;q=0.9', array_keys(LANGUAGE_NAMES)));
+same('browser: script subtags', 'zh-Hant', negotiate_language('zh-Hant-TW', array_keys(LANGUAGE_NAMES)));
+same('browser: q=0 means not wanted', 'es', negotiate_language('ar;q=0,es;q=0.4', array_keys(LANGUAGE_NAMES)));
+same('browser: junk ignored', 'en', negotiate_language('<script>, en', array_keys(LANGUAGE_NAMES)));
+same('plural: English', ['one', 'other', 'other'], [plural_form('en', 1), plural_form('en', 0), plural_form('en', 2)]);
+same('plural: French counts 0 as one', ['one', 'one', 'other'], [plural_form('fr', 0), plural_form('fr', 1), plural_form('fr', 2)]);
+same('plural: Arabic six forms', ['zero', 'one', 'two', 'few', 'many', 'other'],
+    [plural_form('ar', 0), plural_form('ar', 1), plural_form('ar', 2), plural_form('ar', 5), plural_form('ar', 11), plural_form('ar', 100)]);
+same('plural: Chinese has none', 'other', plural_form('zh-Hans', 1));
+check('Arabic is right-to-left, others aren\'t', is_rtl('ar') && !is_rtl('en') && !is_rtl('zh-Hant'));
+same('uses the language\'s own phrase', 'Sprache', in_language('de', fn() => t('language.menu')));
+same('unknown key shows the key', 'no.such.key', t('no.such.key'));
+same('placeholders filled', 'Sat 9 Sep 2028', t('date.long', ['weekday' => 'Sat', 'day' => 9, 'month' => 'Sep', 'year' => 2028]));
+same('HTML pieces kept, everything else escaped', '<b>Sat</b> &lt;9&gt; Sep 2028',
+    t_html('date.long', ['weekday' => '<b>Sat</b>'], ['day' => '<9>', 'month' => 'Sep', 'year' => '2028']));
+same('English date', 'Saturday 9 September 2028', format_date(new DateTimeImmutable('2028-09-09')));
+same('wedding date as written in the site language', WEDDING_DATE, wedding_date_text());
+check('language menu offers every language, each in its own name', (function () {
+    $menu = language_menu();
+    return substr_count($menu, 'name="lang"') === count(site_languages()) && strpos($menu, 'lang="ar" dir="rtl"') !== false
+        && strpos($menu, '简体中文') !== false;
+})());
+
+section('Phrase files');
+$english = phrases('en');
+$holders = function ($value): array {
+    preg_match_all('/\{[a-z_]+\}/', implode("\n", (array)$value), $m);
+    $found = array_values(array_unique($m[0]));
+    sort($found);
+    return $found;
+};
+$pluralForms = ['en' => ['one', 'other'], 'es' => ['one', 'other'], 'de' => ['one', 'other'], 'fr' => ['one', 'other'],
+    'ar' => ['zero', 'one', 'two', 'few', 'many', 'other'], 'zh-Hans' => ['other'], 'zh-Hant' => ['other']];
+foreach (array_keys(LANGUAGE_NAMES) as $code) {
+    $file = __DIR__ . '/../private/lang/' . $code . '.php';
+    check("$code: phrase file exists", is_file($file));
+    $these = phrases($code);
+    $missing = array_diff(array_keys($english), array_keys($these));
+    $extra = array_diff(array_keys($these), array_keys($english));
+    check("$code: has every phrase" . ($missing ? ' (missing ' . implode(', ', array_slice($missing, 0, 5)) . ')' : ''), !$missing);
+    check("$code: no unknown phrases" . ($extra ? ' (' . implode(', ', array_slice($extra, 0, 5)) . ')' : ''), !$extra);
+    $badHolders = [];
+    $badLists = [];
+    $badPlurals = [];
+    foreach ($english as $key => $value) {
+        if (!isset($these[$key])) {
+            continue;
+        }
+        $isPlural = is_array($value) && isset($value['other']);
+        if ($isPlural) {
+            if (!is_array($these[$key]) || array_diff($pluralForms[$code], array_keys($these[$key]))) {
+                $badPlurals[] = $key;
+            }
+        } elseif (is_array($value) && (!is_array($these[$key]) || count($these[$key]) !== count($value))) {
+            $badLists[] = $key;
+        }
+        if ($holders($value) !== $holders($these[$key])) {
+            $badHolders[] = $key;
+        }
+    }
+    check("$code: same {placeholders} as English" . ($badHolders ? ' (' . implode(', ', array_slice($badHolders, 0, 5)) . ')' : ''), !$badHolders);
+    check("$code: lists the same length" . ($badLists ? ' (' . implode(', ', $badLists) . ')' : ''), !$badLists);
+    check("$code: every plural form" . ($badPlurals ? ' (' . implode(', ', $badPlurals) . ')' : ''), !$badPlurals);
+}
+same('Spanish date', 'sábado, 9 de septiembre de 2028', in_language('es', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('German date', 'Samstag, 9. September 2028', in_language('de', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('French date', 'samedi 9 septembre 2028', in_language('fr', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Arabic date', 'السبت 9 سبتمبر 2028', in_language('ar', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Chinese date', '2028年9月9日 星期六', in_language('zh-Hans', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('wedding date in another language is formatted', 'sábado, 9 de septiembre de 2028', in_language('es', 'wedding_date_text'));
+same('dietary options shown translated', 'Vegetariano', in_language('es', fn() => diet_label('Vegetarian')));
+same('typed dietary needs shown as typed', 'Sin cebolla', in_language('es', fn() => diet_label('Sin cebolla')));
+
 section('Invitation codes');
 $code = generate_code();
 check('8 characters', strlen($code) === 8);
@@ -424,6 +504,29 @@ foreach ($argv as $arg) {
     check('RSVP stays open and wiggles until they reply', strpos($guestPage['body'], 'class="card collapsible nudge" id="rsvp" data-key="rsvp" data-open="1"') !== false);
     check('guest page shows the date', strpos($guestPage['body'], WEDDING_DATE) !== false);
     check('guest page shows RSVP with a tick box per person', $guestPage['status'] === 200 && substr_count($guestPage['body'], 'name="coming[]"') === 2);
+
+    // Languages: the first visit saves one from the browser; the footer menu changes it.
+    $langOf = fn() => db()->query('SELECT language || \'/\' || language_set_by FROM guests WHERE code = ' . db()->quote($code))->fetchColumn();
+    check('first visit saves a language on the invitation', $langOf() === 'en/browser');
+    check('guest pages offer the language menu', strpos($guestPage['body'], 'action="/language.php"') !== false);
+    $chose = $get('/language.php', ['csrf' => $csrf($guestPage['body']), 'lang' => 'ar', 'back' => '/guest.php']);
+    check('choosing a language saves it and goes back', $langOf() === 'ar/guest' && stripos($chose['headers'], "location: /guest.php\r\n") !== false);
+    $arabic = $get('/guest.php')['body'];
+    check('the guest page is then Arabic and right-to-left', strpos($arabic, '<html lang="ar" dir="rtl">') !== false
+        && strpos($arabic, 'تأكيد الحضور') !== false && strpos($arabic, 'السبت 9 سبتمبر 2028') !== false);
+    check('dietary options shown in Arabic, saved in English', strpos($arabic, '<option value="Vegetarian">نباتي</option>') !== false);
+    $evil = $get('/language.php', ['csrf' => $csrf($arabic), 'lang' => 'en', 'back' => '//evil.example/x']);
+    check('the language menu only goes back to this site', stripos($evil['headers'], "location: /\r\n") !== false);
+    $refused = $get('/language.php', ['csrf' => $csrf($get('/guest.php')['body']), 'lang' => 'klingon', 'back' => '/guest.php']);
+    check('unknown languages are ignored', $langOf() === 'en/guest');
+    $fresh = function (string $path, string $accept) use ($base) {
+        $ch = curl_init($base . $path);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Accept-Language: ' . $accept]]);
+        return (string)curl_exec($ch);
+    };
+    check('code page follows the browser\'s language', strpos($fresh('/', 'es-ES,es;q=0.9,en;q=0.5'), 'Introduce tu código de invitación') !== false);
+    check('Taiwanese browsers get Traditional Chinese', strpos($fresh('/', 'zh-TW,zh;q=0.9'), '<html lang="zh-Hant" dir="ltr">') !== false);
+    check('unoffered languages fall back to the site\'s', strpos($fresh('/', 'pt-BR'), 'Enter your invitation code') !== false);
     $saved = $get('/guest.php', ['csrf' => $csrf($guestPage['body']), 'attending' => 'yes', 'coming' => ['0'], 'notify' => '1']);
     check('RSVP saved', $saved['status'] === 302 && strpos($saved['headers'], 'saved=1') !== false);
     check('after replying, RSVP can be closed and stay closed', strpos($get('/guest.php')['body'], 'data-open="1"') === false);

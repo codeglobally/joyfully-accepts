@@ -2,6 +2,10 @@
 
 What changed in each version. The site uses [semantic versioning](https://semver.org): MAJOR when site owners must do something to upgrade, MINOR for anything new, PATCH for fixes and small tweaks. Every change bumps the version.
 
+## 2.6.0
+
+- **Languages:** English, Español, Deutsch, Français, العربية (right-to-left), 简体中文 and 繁體中文. Each guest's language is taken from their browser on their first visit, can be changed from the footer, and is saved on their invitation. Dates are shown in each language. Everything other than English is a draft translation: corrections welcome.
+
 ## 2.5.0
 
 - People tab: a **Feedback emails** column showing who gets an email when a guest sends a message, with an on/off switch for the site owner.

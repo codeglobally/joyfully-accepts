@@ -30,6 +30,9 @@ function users_db(): PDO
         if (!in_array('session_key', $columns, true)) {
             $pdo->exec('ALTER TABLE users ADD COLUMN session_key TEXT');   // see admin_session_key()
         }
+        if (!in_array('language', $columns, true)) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN language TEXT');   // their admin language; NULL = the site's
+        }
         if (!in_array('notify_feedback', $columns, true)) {
             $pdo->exec('ALTER TABLE users ADD COLUMN notify_feedback INTEGER NOT NULL DEFAULT 0');   // 1 = email them guests' messages
         }

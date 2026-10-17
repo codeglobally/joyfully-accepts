@@ -25,7 +25,7 @@ const APP_DIR = __DIR__;
 // Semantic version, MAJOR.MINOR.PATCH, bumped with every change (see
 // CHANGELOG.md): MAJOR when site owners must do something to upgrade, MINOR
 // for anything new, PATCH for fixes and small tweaks. Shown in the footer.
-const SITE_VERSION = '2.5.0';
+const SITE_VERSION = '2.6.0';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';
@@ -123,6 +123,10 @@ function db(): PDO
     }
     if (!in_array('notify', $columns, true)) {
         $pdo->exec('ALTER TABLE guests ADD COLUMN notify INTEGER NOT NULL DEFAULT 1');   // 0 = opted out of updates
+    }
+    if (!in_array('language', $columns, true)) {
+        $pdo->exec('ALTER TABLE guests ADD COLUMN language TEXT');          // e.g. 'es'; NULL until their first visit
+        $pdo->exec('ALTER TABLE guests ADD COLUMN language_set_by TEXT');   // 'browser', 'guest' or 'admin'
     }
     if (!in_array('greeting', $columns, true)) {
         $pdo->exec('ALTER TABLE guests ADD COLUMN greeting TEXT');         // typed greeting, used as it is
@@ -718,7 +722,7 @@ function csv_cell(?string $value): string
 function page_header(string $title, string $bodyClass = ''): void
 {
     ?><!doctype html>
-<html lang="en">
+<html lang="<?= h(current_language()) ?>" dir="<?= is_rtl() ? 'rtl' : 'ltr' ?>">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -755,14 +759,16 @@ function lightbox_footer(bool $adminLink = true): string
         $place = MADE_IN_URL !== ''
             ? '<a class="easter-egg" href="' . h(MADE_IN_URL) . '" target="_blank" rel="noopener">' . h(MADE_IN) . '</a>'
             : h(MADE_IN);
-        $made = '<br><span class="made-with">Made with <svg class="heart" viewBox="0 0 24 24" width="14" height="14" role="img" aria-label="love">'
+        $heart = '<svg class="heart" viewBox="0 0 24 24" width="14" height="14" role="img" aria-label="' . th('footer.love') . '">'
             . '<path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.1 0 3.6 1.1 4.2 2.6h2c.6-1.5 2.1-2.6 4.2-2.6 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z" fill="#d6283b"/>'
-            . '</svg> in ' . $place . '</span>';
+            . '</svg>';
+        $made = '<br><span class="made-with">' . t_html('footer.made_with', ['heart' => $heart, 'place' => $place]) . '</span>';
     }
-    $admin = $adminLink ? '<a href="/admin.php">Admin</a> &middot; ' : '';
-    return '<p class="site-footer">' . $admin . 'v' . h(SITE_VERSION) . $made
-        . '<br><span class="copyright">&copy; ' . date('Y') . ' <a href="' . h(PROJECT_URL) . '" target="_blank" rel="noopener">'
-        . h(PROJECT_NAME) . '</a></span></p>';
+    $admin = $adminLink ? '<a href="/admin.php">' . th('footer.admin') . '</a> &middot; ' : '';
+    // The version and "© year global.ly" stay left-to-right in right-to-left pages.
+    return '<p class="site-footer">' . $admin . '<bdi dir="ltr">v' . h(SITE_VERSION) . '</bdi>' . $made
+        . '<br><bdi class="copyright" dir="ltr">&copy; ' . date('Y') . ' <a href="' . h(PROJECT_URL) . '" target="_blank" rel="noopener">'
+        . h(PROJECT_NAME) . '</a></bdi></p>' . language_menu();
 }
 
 function page_footer(): void
@@ -771,3 +777,4 @@ function page_footer(): void
 }
 
 require_once __DIR__ . '/photo.php';
+require_once __DIR__ . '/i18n.php';

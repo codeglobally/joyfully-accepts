@@ -1,0 +1,126 @@
+<?php
+// English phrases: the source for every other language. Keys are grouped by
+// where they're used. A value can be a list (weekday and month names) or,
+// for phrases with a {count}, a set of plural forms ('one', 'other'; Arabic
+// also uses 'zero', 'two', 'few' and 'many').
+return [
+    // Dates: weekdays start on Sunday.
+    'date.long' => '{weekday} {day} {month} {year}',
+    'date.weekdays' => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    'date.months' => ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+
+    // The language menu in the footer.
+    'language.menu' => 'Language',
+
+    // Footer of guest pages.
+    'footer.made_with' => 'Made with {heart} in {place}',
+    'footer.love' => 'love',
+    'footer.admin' => 'Admin',
+
+    // Code page.
+    'home.code_label' => 'Enter your invitation code',
+    'home.enter' => 'Enter',
+    'home.wrong_code' => "That code doesn't match an invitation. Please check it and try again.",
+    'home.too_many' => 'Too many attempts. Please wait {minutes} minutes and try again.',
+    'home.photo_link' => 'Link',
+
+    // Guest page.
+    'guest.sign_out' => 'Sign out',
+    'guest.welcome' => 'Welcome',
+    'cal.add' => 'Add to calendar',
+    'cal.apple' => 'Apple Calendar, iPhone or Outlook app',
+    'cal.apple_hint' => 'with reminders a week and a day before',
+    'cal.google' => 'Google Calendar',
+    'cal.outlook' => 'Outlook.com or Office 365',
+    'rsvp.title' => 'RSVP',
+    'rsvp.question' => 'Will you be joining us?',
+    'rsvp.yes' => 'Joyfully accepts',
+    'rsvp.no' => 'Regretfully declines',
+    'rsvp.maybe_me' => "Not sure yet, I'll get back to you",
+    'rsvp.maybe_us' => "Not sure yet, we'll get back to you",
+    'rsvp.who' => "Who's coming?",
+    'rsvp.plus_one' => 'Guest',
+    'rsvp.how_many' => 'How many of you are coming?',
+    'rsvp.how_many_label' => 'Number of people coming',
+    'rsvp.choose' => 'Choose…',
+    'rsvp.diet' => 'Dietary requirements',
+    'rsvp.diet_hint_one' => 'Choose any that apply, or type your own and press Enter. Leave empty if there are none.',
+    'rsvp.diet_hint_many' => 'Choose any that apply for each of you, or type your own and press Enter. Leave empty if there are none.',
+    'rsvp.diet_placeholder' => 'Choose or type…',
+    'rsvp.diet_party_placeholder' => 'e.g. Liam: coeliac',
+    'rsvp.your_party' => 'Your party',
+    'rsvp.updates_me' => 'Email me updates about the wedding',
+    'rsvp.updates_us' => 'Email us updates about the wedding',
+    'rsvp.updates_hint' => 'Occasional news such as hotel details, timings and reminders. You can turn this off at any time.',
+    'rsvp.send' => 'Send reply',
+    'rsvp.update' => 'Update reply',
+    'rsvp.error_nobody' => 'Tick at least one person who\'s coming, or choose "{no}".',
+    'rsvp.error_count' => 'Let us know how many of you are coming.',
+    'rsvp.saved_yes' => "Thank you, your reply has been saved. We can't wait to see you!",
+    'rsvp.saved_no' => "Thank you for letting us know. You'll be missed. You can change your reply here at any time.",
+    'rsvp.saved_maybe' => "Thanks, we've noted that you'll get back to us. Come back and update your reply whenever you know.",
+    'chips.add' => 'Add “{text}”',
+    'chips.remove' => 'Remove {text}',
+    'card.collapse' => 'Collapse',
+    'card.expand' => 'Expand',
+    'feedback.button' => 'Send us feedback',
+    'feedback.label' => "Questions, ideas or anything you'd like us to know. Only we can see this.",
+    'feedback.empty' => 'Please write a message first.',
+    'feedback.limit' => "Thanks! You've sent a few messages today, so please try again tomorrow.",
+    'feedback.send' => 'Send',
+    'feedback.sent' => "Thank you, we've got your message.",
+
+    // Dietary options: saved in English (for the caterer), shown translated.
+    'diet.Vegetarian' => 'Vegetarian',
+    'diet.Vegan' => 'Vegan',
+    'diet.Pescatarian' => 'Pescatarian',
+    'diet.Gluten-free' => 'Gluten-free',
+    'diet.Coeliac' => 'Coeliac',
+    'diet.Dairy-free' => 'Dairy-free',
+    'diet.Lactose intolerant' => 'Lactose intolerant',
+    'diet.Nut allergy' => 'Nut allergy',
+    'diet.Peanut allergy' => 'Peanut allergy',
+    'diet.Shellfish allergy' => 'Shellfish allergy',
+    'diet.Fish allergy' => 'Fish allergy',
+    'diet.Egg allergy' => 'Egg allergy',
+    'diet.Soy allergy' => 'Soy allergy',
+    'diet.Sesame allergy' => 'Sesame allergy',
+    'diet.Halal' => 'Halal',
+    'diet.Kosher' => 'Kosher',
+    'diet.No pork' => 'No pork',
+    'diet.No alcohol' => 'No alcohol',
+    "diet.Children's meal" => "Children's meal",
+
+    // Calendar file and links.
+    'cal.title' => "{couple}'s wedding",
+    'cal.details' => 'Details, timings and your RSVP:',
+    'cal.details_short' => 'Details and RSVP: {link}',
+    'cal.in_a_week' => '{title} is in a week',
+    'cal.tomorrow' => '{title} is tomorrow',
+    'cal.no_date' => 'The wedding date is not set.',
+
+    // Unsubscribe page.
+    'unsub.eyebrow' => 'Wedding updates',
+    'unsub.no_match' => "This link doesn't match an invitation. Please check you used the whole link from your email.",
+    'unsub.done_off' => "Done. You won't get any more update emails.",
+    'unsub.done_on' => "Thanks, you'll get updates again.",
+    'unsub.ask' => 'Stop wedding update emails for {name}? You can still see everything, and change your reply, on the wedding website.',
+    'unsub.off_now' => 'Update emails are turned off for {name}.',
+    'unsub.stop' => 'Stop update emails',
+    'unsub.restart' => 'Turn updates back on',
+    'unsub.site_link' => 'Go to the wedding website',
+    'unsub.one_click' => 'Unsubscribed.',
+
+    // Page not found.
+    'notfound.title' => 'Page not found',
+    'notfound.quips' => [
+        "This page must have RSVP'd no.",
+        'This page wandered off to find the bar.',
+        "We've looked under every table. It isn't here.",
+        'This page is fashionably late. Very late.',
+        'This page got lost on the way to the venue.',
+    ],
+    'notfound.hint' => 'The link may have a typo, or the page has moved.',
+    'notfound.back_invitation' => 'Back to your invitation',
+    'notfound.back_home' => 'Back to the invitation',
+];

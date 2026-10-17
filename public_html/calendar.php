@@ -4,9 +4,10 @@ require is_dir(__DIR__ . '/../private') ? __DIR__ . '/../private/lib.php' : __DI
 require APP_DIR . '/calendar.php';
 
 $guest = require_guest();
+set_language(guest_language($guest));
 if (!wedding_day()) {
     http_response_code(404);
-    exit('The wedding date is not set.');
+    exit(t('cal.no_date'));
 }
 header('Content-Type: text/calendar; charset=utf-8');
 header('Content-Disposition: attachment; filename="wedding.ics"');
