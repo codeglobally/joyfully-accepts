@@ -397,6 +397,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach (['from_name', 'from', 'reply_to', 'subject', 'body'] as $field) {
             save_setting('mail_' . $field, trim(str_replace("\r\n", "\n", input($_POST, $field))));
         }
+        // One line, at most 60 characters; empty goes back to the default.
+        preg_match('/^.{0,60}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'tagline'))), $m);
+        save_setting('tagline', trim($m[0] ?? ''));
         if ($action === 'preview') {
             header('Location: /admin.php?preview=1');   // opens in its own tab
             exit;
@@ -1206,6 +1209,11 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         <label>Replies go to<input type="email" name="reply_to" value="<?= h($mail['reply_to']) ?>" placeholder="you@example.com"></label>
       </div>
       <p class="hint">The From address should be an email account on your wedding domain, so emails aren't marked as spam. Replies and tests go to the "Replies go to" address.</p>
+      <label>Tagline<input type="text" name="tagline" value="<?= h(setting('tagline')) ?>" maxlength="60"
+        placeholder="<?= h(DEFAULT_TAGLINE) ?>" aria-describedby="tagline-hint"></label>
+      <p class="hint" id="tagline-hint">The short line above your names, on the page where guests enter their code and at
+        the top of this email. Leave it empty for "<?= h(DEFAULT_TAGLINE) ?>". For example: <em>Save the date</em>,
+        <em>Join us</em> or <em>We're getting married</em>.</p>
       <label>Subject<input type="text" name="subject" value="<?= h($mail['subject']) ?>"></label>
       <label>Message
         <textarea name="body" rows="12"><?= h($mail['body']) ?></textarea>

@@ -68,7 +68,7 @@ function email_image_path(): string
 // html loads the photo from: the embedded copy by default, or a URL.
 function render_invite(array $guest, array $settings, string $imageSrc = 'cid:' . EMAIL_IMAGE_CID): array
 {
-    return render_email($guest, $settings['subject'], $settings['body'], $imageSrc, 'You&rsquo;re invited');
+    return render_email($guest, $settings['subject'], $settings['body'], $imageSrc, h(tagline()));
 }
 
 // The branded email used for invitations and updates. $eyebrow is the small

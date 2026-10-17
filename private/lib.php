@@ -370,6 +370,16 @@ function initials(string $name): string
     return function_exists('mb_strtoupper') ? mb_strtoupper($pick) : strtoupper($pick);
 }
 
+// The short line above the couple's names on the code-entry page and at the
+// top of the invitation email. Set on the Invitation email tab.
+const DEFAULT_TAGLINE = "You're invited";
+
+function tagline(): string
+{
+    $tagline = trim(setting('tagline'));
+    return $tagline !== '' ? $tagline : DEFAULT_TAGLINE;
+}
+
 // The site-wide choice: 'full' (the default) or 'first'.
 function site_greeting_style(): string
 {
