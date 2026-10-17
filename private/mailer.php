@@ -224,3 +224,40 @@ function send_invite(array $guest, array $settings): bool
     }
     return $to && $sent === count($to);
 }
+
+// Tells opted-in admins that a guest has sent a message (see
+// feedback_recipients()). Replies go straight to the guest when their
+// invitation has an email address. Returns how many were sent.
+function send_feedback_notice(array $guest, string $message): int
+{
+    $settings = mail_settings();
+    if (!valid_email($settings['from'])) {
+        return 0;
+    }
+    $guestEmail = sendable_emails($guest['email'] ?? null)[0] ?? '';
+    $settings['reply_to'] = $guestEmail;
+    $from = (string)$guest['name'];
+    $inbox = SITE_URL . '/admin.php?tab=feedback';
+    $account = SITE_URL . '/admin.php?tab=account';
+    $subject = 'New message from ' . $from;
+    $replyNote = $guestEmail !== '' ? 'Reply to this email to answer them directly.' : 'Their invitation has no email address, so you can\'t reply by email.';
+    $text = "$from sent a message through your wedding website:\n\n" . $message . "\n\n"
+        . "$replyNote\nSee all messages: $inbox\n\n--\n"
+        . "You're getting this because you turned on feedback emails. Turn them off: $account";
+    $font = "'Helvetica Neue',Helvetica,Arial,sans-serif";
+    $html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' . h($subject) . '</title></head>'
+        . '<body style="margin:0;padding:24px;background:#faf7f4;font:16px/1.5 ' . $font . ';color:#2a211c">'
+        . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #eadfd6;border-radius:12px;padding:24px">'
+        . '<p style="margin:0 0 12px;color:#8a6552;font-size:13px;letter-spacing:0.12em;text-transform:uppercase">New message</p>'
+        . '<p style="margin:0 0 16px"><strong>' . h($from) . '</strong> sent a message through your wedding website:</p>'
+        . '<blockquote style="margin:0 0 20px;padding:12px 16px;background:#fff7f1;border-left:3px solid #c2410c;border-radius:4px">'
+        . nl2br(h($message)) . '</blockquote>'
+        . '<p style="margin:0 0 16px">' . h($replyNote) . ' <a href="' . h($inbox) . '" style="color:#c2410c">See all messages</a></p>'
+        . '<p style="margin:24px 0 0;font-size:13px;color:#8a6552">You&rsquo;re getting this because you turned on feedback emails. '
+        . '<a href="' . h($account) . '" style="color:#8a6552">Turn them off</a></p></div></body></html>';
+    $sent = 0;
+    foreach (feedback_recipients() as $person) {
+        $sent += send_email($person['email'], $person['name'], $subject, $text, $html, $settings) ? 1 : 0;
+    }
+    return $sent;
+}

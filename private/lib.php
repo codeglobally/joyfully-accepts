@@ -22,9 +22,10 @@ if (!in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD', 'POST'], true
 
 const APP_DIR = __DIR__;
 
-// Bump this with every release. It's shown in the lightbox footer and also
-// makes browsers fetch fresh copies of the stylesheet and scripts.
-const SITE_VERSION = '2.3';
+// Semantic version, MAJOR.MINOR.PATCH, bumped with every change (see
+// CHANGELOG.md): MAJOR when site owners must do something to upgrade, MINOR
+// for anything new, PATCH for fixes and small tweaks. Shown in the footer.
+const SITE_VERSION = '2.5.0';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';

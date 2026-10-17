@@ -32,7 +32,7 @@ WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php tests/r
 - **Wording** is plain, warm British English for non-technical guests. Comments explain *why*, in the same plain style.
 - **Assets:** link CSS and JS with `asset_url()`, so they're cached long-term and refreshed when changed.
 - **Every change gets a test** in `tests/run.php`. Match the surrounding code rather than adding new layers.
-- If the version changes, update `SITE_VERSION` in `private/lib.php` and the badge in README.md together.
+- **Bump the version with every change**, using semantic versioning (MAJOR.MINOR.PATCH): MAJOR when site owners must do something to upgrade (a renamed setting, a migration that isn't automatic, dropping a PHP version), MINOR for anything new (a feature, setting or page), PATCH for fixes, wording and small tweaks. Change `SITE_VERSION` in `private/lib.php` and the README badge together, and add a line to `CHANGELOG.md`. A test checks they match.
 
 ## Privacy: never leak a real wedding
 

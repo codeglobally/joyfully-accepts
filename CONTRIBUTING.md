@@ -56,6 +56,16 @@ WEDDING_CONFIG=$PWD/tests/config.php WEDDING_TEST_DB=/tmp/e2e.sqlite php tests/r
 
 GitHub Actions runs these on every push, along with a Psalm taint analysis and an OWASP ZAP scan (see [SECURITY.md](SECURITY.md)). Forks get the same checks once Actions is switched on in the fork's Actions tab. If you change something, add a test for it.
 
+## Versions
+
+The site uses [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
+
+- **MAJOR** when site owners have to do something to upgrade, such as renaming a setting in `config.php`.
+- **MINOR** for anything new: a feature, a setting or a page.
+- **PATCH** for fixes, wording and small tweaks.
+
+Every change bumps one of them, in `SITE_VERSION` in `private/lib.php` and the README badge, with a line in [CHANGELOG.md](CHANGELOG.md).
+
 ## About pull requests
 
 Pull requests are open to collaborators only, which keeps the project small and easy to look after. If you've fixed something or have an improvement:

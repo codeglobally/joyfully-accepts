@@ -30,6 +30,9 @@ function users_db(): PDO
         if (!in_array('session_key', $columns, true)) {
             $pdo->exec('ALTER TABLE users ADD COLUMN session_key TEXT');   // see admin_session_key()
         }
+        if (!in_array('notify_feedback', $columns, true)) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN notify_feedback INTEGER NOT NULL DEFAULT 0');   // 1 = email them guests' messages
+        }
         $ready = true;
     }
     return $pdo;
@@ -257,3 +260,64 @@ function send_setup_email(array $user, string $url, bool $reset): bool
     return send_email($user['email'], $user['name'], $subject, $text, $html, mail_settings());
 }
 
+
+// --- Email address and feedback emails ---------------------------------
+// Everyone in admin can give an email address and choose to be emailed when
+// a guest sends a message. Other admins' addresses live in the users table
+// (they're also used for password resets); the owner's, which isn't, in
+// settings.
+
+// ['email' => …, 'notify' => bool] for one admin (0 = the owner).
+function admin_contact(int $id): array
+{
+    if ($id === 0) {
+        return ['email' => setting('owner_email'), 'notify' => setting('owner_notify_feedback') === '1'];
+    }
+    $q = users_db()->prepare('SELECT email, notify_feedback FROM users WHERE id = ?');
+    $q->execute([$id]);
+    $row = $q->fetch() ?: [];
+    return ['email' => (string)($row['email'] ?? ''), 'notify' => (int)($row['notify_feedback'] ?? 0) === 1];
+}
+
+function save_admin_contact(int $id, string $email, bool $notify): void
+{
+    if ($id === 0) {
+        save_setting('owner_email', $email);
+        save_setting('owner_notify_feedback', $notify ? '1' : '0');
+        return;
+    }
+    users_db()->prepare('UPDATE users SET email = ?, notify_feedback = ? WHERE id = ?')
+        ->execute([$email !== '' ? $email : null, $notify ? 1 : 0, $id]);
+}
+
+// Who to email when a guest sends a message: [['name' => …, 'email' => …], …].
+// Only people who can still sign in, have opted in and have a valid address.
+function feedback_recipients(): array
+{
+    $people = [];
+    $owner = admin_contact(0);
+    if ($owner['notify'] && valid_email($owner['email'])) {
+        $people[] = ['name' => COUPLE_NAMES, 'email' => $owner['email']];
+    }
+    $q = users_db()->query('SELECT name, email FROM users WHERE notify_feedback = 1 AND password_hash IS NOT NULL');
+    foreach ($q->fetchAll() as $u) {
+        if (valid_email($u['email'])) {
+            $people[] = ['name' => $u['name'], 'email' => $u['email']];
+        }
+    }
+    // One email per address, even if two people share one.
+    $unique = [];
+    foreach ($people as $p) {
+        $unique[strtolower($p['email'])] = $unique[strtolower($p['email'])] ?? $p;
+    }
+    return array_values($unique);
+}
+
+// True if $password is this admin's current password (bcrypt, constant time).
+function password_matches(int $id, string $password): bool
+{
+    $q = users_db()->prepare('SELECT password_hash FROM users WHERE id = ?');
+    $q->execute([$id]);
+    $hash = (string)$q->fetchColumn();
+    return $hash !== '' && password_verify($password, $hash);
+}

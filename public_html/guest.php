@@ -4,6 +4,8 @@
 require is_dir(__DIR__ . '/../private') ? __DIR__ . '/../private/lib.php' : __DIR__ . '/private/lib.php';
 require APP_DIR . '/content.php';
 require APP_DIR . '/calendar.php';
+require APP_DIR . '/mailer.php';
+require APP_DIR . '/users.php';
 
 $guest = require_guest();
 $saved = false;
@@ -30,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && input($_POST, 'action') === 'feedba
     } else {
         db()->prepare('INSERT INTO feedback (guest_id, guest_name, message) VALUES (?, ?, ?)')
             ->execute([$guest['id'], $guest['name'], $m[0]]);
+        send_feedback_notice($guest, $m[0]);   // to admins who asked; the message is saved either way
         $result = 'sent';
     }
     header('Location: /guest.php?feedback=' . $result . '#feedback');

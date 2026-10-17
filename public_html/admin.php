@@ -26,7 +26,15 @@ if (isset($_GET['setup'])) {
             $error = "The two passwords don't match.";
         } else {
             set_password((int)$user['id'], $password);
-            sign_in(['id' => (int)$user['id'], 'name' => $user['name'], 'owner' => false]);
+            $who = ['id' => (int)$user['id'], 'name' => $user['name'], 'owner' => false];
+            if (passkey_required((int)$user['id'])) {
+                // A new password from an emailed link still needs their passkey.
+                session_regenerate_id(true);
+                $_SESSION['pending_admin'] = ['user' => $who, 'until' => time() + PASSKEY_SECONDS];
+                header('Location: /admin.php');
+                exit;
+            }
+            sign_in($who);
             $_SESSION['flash'] = 'Welcome, ' . $user['name'] . '. Sign in with the username "' . $user['username'] . '" from now on.';
             header('Location: /admin.php');
             exit;
@@ -270,6 +278,21 @@ if (is_owner()) {
 $tab = input($_GET, 'tab');
 if (!isset($tabs[$tab])) {
     $tab = 'guests';
+}
+
+// The People tab's "Feedback emails" tick box for one person. Ticking it
+// saves straight away (admin.js); without JavaScript there's a Save button.
+function feedback_toggle(int $id, string $name, array $contact): string
+{
+    if (!valid_email($contact['email'])) {
+        return '<span class="hint">No email address</span>';
+    }
+    $label = 'Email ' . ($id === 0 ? 'you' : $name) . ' when a guest sends a message';
+    return '<form method="post" class="inline feedback-toggle" data-autosubmit>' . csrf_field()
+        . '<input type="hidden" name="action" value="user_feedback"><input type="hidden" name="id" value="' . $id . '">'
+        . '<label class="check"><input type="checkbox" name="notify_feedback" value="1"' . ($contact['notify'] ? ' checked' : '')
+        . ' aria-label="' . h($label) . '"> ' . ($contact['notify'] ? 'On' : 'Off') . '</label>'
+        . ' <button class="link small" data-autosubmit-button>Save</button></form>';
 }
 
 // --- Actions --------------------------------------------------------
@@ -620,6 +643,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Deleted "' . $s['title'] . '".';
         }
 
+    // --- Your email address and feedback emails ---
+    } elseif ($action === 'account_contact') {
+        $back = 'account';
+        $email = trim(input($_POST, 'email'));
+        $notify = input($_POST, 'notify_feedback') === '1';
+        $current = admin_contact((int)$me['id']);
+        $changed = strtolower($email) !== strtolower($current['email']);
+        if ($email !== '' && !valid_email($email)) {
+            $message = 'That email address doesn\'t look right, so nothing was changed.';
+        } elseif ($notify && $email === '') {
+            $message = 'Add your email address to get feedback emails.';
+        } elseif ($changed && $me['id'] && !password_matches((int)$me['id'], input($_POST, 'current_password'))) {
+            // Other admins' addresses are used for password resets, so changing
+            // one needs their password, not just a signed-in browser.
+            $message = 'To change your email address, enter your current password too.';
+        } else {
+            save_admin_contact((int)$me['id'], $email, $notify);
+            $message = $notify ? 'Saved. You\'ll get an email when a guest sends a message.' : 'Saved.';
+        }
+
     // --- Your passkeys ---
     } elseif ($action === 'passkey_register') {
         $back = 'account';
@@ -651,6 +694,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : 'Passkey removed. You can now sign in with just your password, so consider adding another.';
 
     // --- People (owner only) ---
+    } elseif ($action === 'user_feedback') {
+        // Owner only: switch someone's feedback emails on or off from the People tab.
+        $back = 'people';
+        if (!is_owner()) {
+            http_response_code(403);
+            exit('Only the site owner can manage logins.');
+        }
+        $id = (int)input($_POST, 'id');
+        $on = input($_POST, 'notify_feedback') === '1';
+        $u = $id === 0 ? ['name' => 'You'] : find_user($id);
+        $contact = $u ? admin_contact($id) : null;
+        if (!$u) {
+            $message = 'That person no longer exists.';
+        } elseif ($on && !valid_email($contact['email'])) {
+            $message = $u['name'] . ' needs an email address first' . ($id === 0 ? ' (add it on Your account).' : ' (use Edit).');
+        } else {
+            save_admin_contact($id, $contact['email'], $on);
+            $message = ($id === 0 ? 'You' : $u['name']) . ($on ? ' will now get' : ' will no longer get') . ' an email when a guest sends a message.';
+        }
     } elseif (in_array($action, ['user_add', 'user_reset', 'user_remove', 'user_update'], true)) {
         $back = 'people';
         if (!is_owner()) {
@@ -840,10 +902,10 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
           </div>
         </div>
         <a class="account-item" href="/admin.php?tab=account" <?= $tab === 'account' ? 'aria-current="page"' : '' ?>>
-          <span>Sign-in and passkeys</span>
+          <span>Your account</span>
           <small class="<?= $myPasskeys ? '' : 'nudge' ?>"><?= $myPasskeys
               ? $myPasskeys . ' passkey' . ($myPasskeys === 1 ? '' : 's')
-              : 'No passkey yet: add one' ?></small>
+              : 'No passkey yet: add one' ?><?= admin_contact((int)$me['id'])['notify'] ? ' · feedback emails on' : '' ?></small>
         </a>
         <form method="post" class="account-signout">
           <?= csrf_field() ?>
@@ -1530,11 +1592,14 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     <?php endif; ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Status</th><th>Last signed in</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Status</th><th>Last signed in</th><th>Feedback emails</th><th></th></tr></thead>
         <tbody>
           <tr>
-            <td>You (owner)</td><td><code><?= OWNER_USERNAME ?></code></td><td>—</td>
+            <?php $ownerContact = admin_contact(0); ?>
+            <td>You (owner)</td><td><code><?= OWNER_USERNAME ?></code></td>
+            <td class="email-cell"><?= $ownerContact['email'] !== '' ? h($ownerContact['email']) : '—' ?></td>
             <td><span class="pill yes">Active</span></td><td>—</td>
+            <td><?= feedback_toggle(0, 'yourself', $ownerContact) ?></td>
             <td class="hint">Password set in config.php</td>
           </tr>
           <?php foreach ($users as $u):
@@ -1547,6 +1612,7 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
             <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span>
               <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= $keys ?> passkey<?= $keys === 1 ? '' : 's' ?></span><?php endif; ?></td>
             <td><?= $u['last_login'] ? h(date('j M, H:i', strtotime($u['last_login'] . ' UTC'))) : '—' ?></td>
+            <td><?= feedback_toggle((int)$u['id'], $u['name'], admin_contact((int)$u['id'])) ?></td>
             <td class="row-actions">
               <a class="link small" href="/admin.php?tab=people&amp;edit_user=<?= (int)$u['id'] ?>#edit-user">Edit</a>
               <?php if (valid_email($u['email'])): ?>
@@ -1588,7 +1654,28 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
 <?php elseif ($tab === 'account'): $mine = user_passkeys((int)$me['id']); $origin = passkey_origin(); ?>
 
-  <h2 class="page-title">Your sign-in</h2>
+  <h2 class="page-title">Your account</h2>
+  <?php $contact = admin_contact((int)$me['id']); ?>
+  <section class="card">
+    <h2>Email and notifications</h2>
+    <form method="post" class="email-form account-contact">
+      <?= csrf_field() ?>
+      <label>Your email address<input type="email" name="email" value="<?= h($contact['email']) ?>" placeholder="you@example.com" autocomplete="email"></label>
+      <?php if ($me['id']): ?>
+        <label>Current password <span class="hint-inline">(only needed to change your email address)</span>
+          <input type="password" name="current_password" autocomplete="current-password"></label>
+        <p class="hint">Also used if you ever need to reset your password.</p>
+      <?php else: ?>
+        <p class="hint">Only used for the emails below. Your password is set in config.php.</p>
+      <?php endif; ?>
+      <label class="check"><input type="checkbox" name="notify_feedback" value="1" <?= $contact['notify'] ? 'checked' : '' ?>>
+        Email me when a guest sends a message</label>
+      <p class="hint">You'll get their name and message, with a link to the Feedback tab. If their invitation has an email
+        address, replying to the email goes straight to them.</p>
+      <button type="submit" name="action" value="account_contact">Save</button>
+    </form>
+  </section>
+
   <section class="card">
     <h2>Passkeys</h2>
     <p class="hint">A passkey lets you sign in with Face ID, a fingerprint or your device's PIN instead of typing your
