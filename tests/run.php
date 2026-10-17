@@ -210,6 +210,24 @@ foreach ($attacks as $what => [$c, $ad, $sig]) {
     check("passkey sign-in refused: $what", is_string(verify_passkey_assertion($site, $stored, $c, $ad, $sig)));
 }
 
+section('Feedback emails');
+save_admin_contact(0, '', false);
+same('nobody opted in, nobody emailed', [], feedback_recipients());
+save_admin_contact(0, 'couple@example.com', true);
+users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, password_hash) VALUES (?, ?, ?, 1, ?)')
+    ->execute(['Pat', 'pat', 'pat@example.com', password_hash('x', PASSWORD_DEFAULT)]);
+users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, password_hash) VALUES (?, ?, ?, 0, ?)')
+    ->execute(['Kim', 'kim', 'kim@example.com', password_hash('x', PASSWORD_DEFAULT)]);
+users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback) VALUES (?, ?, ?, 1)')
+    ->execute(['New', 'new', 'new@example.com']);
+users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, password_hash) VALUES (?, ?, ?, 1, ?)')
+    ->execute(['Same', 'same', 'COUPLE@example.com', password_hash('x', PASSWORD_DEFAULT)]);
+same('opted-in people who can sign in, one email per address', ['couple@example.com', 'pat@example.com'],
+    array_column(feedback_recipients(), 'email'));
+check('owner contact saved', admin_contact(0) === ['email' => 'couple@example.com', 'notify' => true]);
+users_db()->exec("DELETE FROM users WHERE username IN ('pat', 'kim', 'new', 'same')");
+save_admin_contact(0, '', false);
+
 section('Tagline');
 save_setting('tagline', '');
 same('default tagline', "You're invited", tagline());
@@ -448,6 +466,68 @@ foreach ($argv as $arg) {
     $forged = $as2('/admin.php', ['csrf' => $csrf($joLogin['body']), 'action' => 'user_remove', 'id' => $joId]);
     check('a signed-out session can\'t act', $forged['status'] !== 200 || strpos($forged['body'], 'Removed') === false);
     users_db()->prepare('DELETE FROM users WHERE id = ?')->execute([$joId]);
+
+    // Feedback emails: the owner opts in; a guest's message reaches opted-in admins only.
+    $account = $get('/admin.php?tab=account');
+    $get('/admin.php', ['csrf' => $csrf($account['body']), 'action' => 'account_contact', 'email' => 'couple@example.com', 'notify_feedback' => '1']);
+    check('owner can turn on feedback emails', strpos($get('/admin.php?tab=account')['body'], 'get an email when a guest sends a message') !== false
+        && admin_contact(0) === ['email' => 'couple@example.com', 'notify' => true]);
+    users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, password_hash) VALUES (?, ?, ?, ?, ?)')
+        ->execute(['Lee', 'lee', 'lee@example.com', 1, password_hash('lee-long-password', PASSWORD_DEFAULT)]);
+    users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, password_hash) VALUES (?, ?, ?, ?, ?)')
+        ->execute(['Kim', 'kim', 'kim@example.com', 0, password_hash('kim-long-password', PASSWORD_DEFAULT)]);
+    $mailLog = dirname(DB_PATH) . '/mail.log';
+    @unlink($mailLog);
+    $guestForm = $get('/guest.php');
+    $get('/guest.php', ['csrf' => $csrf($guestForm['body']), 'action' => 'feedback', 'message' => "Is there <b>parking</b> & a lift?"]);
+    $log = (string)@file_get_contents($mailLog);
+    preg_match_all('#Content-Transfer-Encoding: base64\r\n(?:[^\r\n]+\r\n)*\r\n([A-Za-z0-9+/=\r\n]+?)\r\n(?:--|$)#', $log, $parts);
+    $decoded = implode("\n", array_map(fn($b) => base64_decode(str_replace("\r\n", '', $b)), $parts[1]));
+    check('feedback emailed to opted-in admins only', substr_count($log, '==== ') === 2 && strpos($log, '<couple@example.com>') !== false
+        && strpos($log, '<lee@example.com>') !== false && strpos($log, 'kim@example.com') === false);
+    check('replying goes to the guest', substr_count($log, 'Reply-To: sarah@example.com') === 2);
+    check('the email has their message, safely', strpos($decoded, 'Is there <b>parking</b> & a lift?') !== false
+        && strpos($decoded, 'Is there &lt;b&gt;parking&lt;/b&gt; &amp; a lift?') !== false && strpos($decoded, 'tab=feedback') !== false);
+    check('the message is still saved for the Feedback tab', (int)db()->query("SELECT COUNT(*) FROM feedback WHERE message LIKE 'Is there%'")->fetchColumn() === 1);
+    @unlink($mailLog);
+
+    // Other admins need their password to change their email address (it's used for resets).
+    $leeId = (int)users_db()->query("SELECT id FROM users WHERE username = 'lee'")->fetchColumn();
+    $leeLogin = $as2('/admin.php');
+    $as2('/admin.php', ['csrf' => $csrf($leeLogin['body']), 'username' => 'lee', 'password' => 'lee-long-password', 'login' => '1']);
+    $leeAccount = $as2('/admin.php?tab=account');
+    $as2('/admin.php', ['csrf' => $csrf($leeAccount['body']), 'action' => 'account_contact', 'email' => 'attacker@example.com', 'notify_feedback' => '1']);
+    check('changing an admin\'s email needs their password', admin_contact($leeId)['email'] === 'lee@example.com');
+    $leeAccount = $as2('/admin.php?tab=account');
+    $as2('/admin.php', ['csrf' => $csrf($leeAccount['body']), 'action' => 'account_contact', 'email' => 'lee2@example.com',
+        'notify_feedback' => '1', 'current_password' => 'lee-long-password']);
+    check('with their password it changes', admin_contact($leeId)['email'] === 'lee2@example.com');
+    $leeAccount = $as2('/admin.php?tab=account');
+    $as2('/admin.php', ['csrf' => $csrf($leeAccount['body']), 'action' => 'account_contact', 'email' => 'lee2@example.com']);
+    check('turning feedback emails off needs no password', admin_contact($leeId)['notify'] === false);
+
+    // A password reset link mustn't get past someone's passkey.
+    passkeys_db()->prepare('INSERT INTO passkeys (user_id, credential_id, public_key, name) VALUES (?, ?, ?, ?)')
+        ->execute([$leeId, 'test-credential-lee', 'not a real key', 'Lee phone']);
+    $resetUrl = new_setup_link($leeId);
+    $jar4 = tempnam(sys_get_temp_dir(), 'jar');
+    $fresh = function (string $path, ?array $post = null) use ($base, $jar4) {
+        $ch = curl_init($base . $path);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_COOKIEJAR => $jar4, CURLOPT_COOKIEFILE => $jar4]);
+        if ($post !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+        }
+        return (string)curl_exec($ch);
+    };
+    $resetPath = '/admin.php?setup=' . urlencode(substr($resetUrl, strpos($resetUrl, 'setup=') + 6));
+    $resetPage = $fresh($resetPath);
+    $fresh($resetPath, ['csrf' => $csrf($resetPage), 'password' => 'lee-new-long-password', 'confirm' => 'lee-new-long-password']);
+    $after = $fresh('/admin.php?tab=guests');
+    check('a password reset still asks for their passkey', strpos($after, 'confirm it\'s you with your passkey') !== false && strpos($after, 'Invitations (') === false);
+    @unlink($jar4);
+    passkeys_db()->exec("DELETE FROM passkeys WHERE user_id = $leeId");
+    users_db()->exec("DELETE FROM users WHERE username IN ('lee', 'kim')");
+    save_admin_contact(0, '', false);
     @unlink($jar2);
 
     // Tagline: set on the Invitation email tab, shown on the code page.

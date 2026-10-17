@@ -49,7 +49,7 @@ The checks that apply to a site like this:
 
 | Area | Status |
 |---|---|
-| V2 Authentication | Met: minimum 12 characters, no composition rules, rate limiting, hashed passwords, single-use expiring reset links. Optional passkeys (WebAuthn, with user verification required), which once added are required on their own or as a second step after the password. **Not done:** checking passwords against breach lists (2.1.7), and the owner password is stored in plain text in config (see Known limits). |
+| V2 Authentication | Met: minimum 12 characters, no composition rules, rate limiting, hashed passwords, single-use expiring reset links. Optional passkeys (WebAuthn, with user verification required), which once added are required on their own or as a second step after the password. **Not done:** checking passwords against breach lists (2.1.7), and the owner password is stored in plain text in config (see Known limits).  A password reset by emailed link still requires the person's passkey, and changing an admin's email address (used for resets) needs their current password. |
 | V3 Session management | Met: new ID and CSRF token at sign-in, ended at sign-out, cookie flags, idle (2 hours) and absolute (12 hours) limits for admins, and sessions ended when a password changes. |
 | V4 Access control | Met: checked on the server for every request, least privilege for extra admins, CSRF protection. |
 | V5 Validation, sanitising and encoding | Met: inputs read as plain strings, length and type checks, escaping by context (HTML, attributes, CSS, CSV, email, iCalendar), parameterised SQL. |

@@ -925,3 +925,4 @@ body.photo-bg::after {
   82% { transform: rotate(0); }
 }
 @media (prefers-reduced-motion: reduce) { .card.nudge { animation: none; } }
+.hint-inline { font-size: 0.8rem; color: var(--muted); }
