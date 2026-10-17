@@ -48,7 +48,7 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg' : 'centered');
     array_keys(PHOTO_CAPTION), PHOTO_CAPTION)) ?></p>
 <?php endif; ?>
 <main class="entry lightbox">
-  <p class="eyebrow">You're invited</p>
+  <p class="eyebrow"><?= h(tagline()) ?></p>
   <h1><?= h(COUPLE_NAMES) ?></h1>
   <?php if (DATE_ON_HOME_PAGE): ?><p class="date"><?= h(WEDDING_DATE) ?></p><?php endif; ?>
 

@@ -210,6 +210,15 @@ foreach ($attacks as $what => [$c, $ad, $sig]) {
     check("passkey sign-in refused: $what", is_string(verify_passkey_assertion($site, $stored, $c, $ad, $sig)));
 }
 
+section('Tagline');
+save_setting('tagline', '');
+same('default tagline', "You're invited", tagline());
+save_setting('tagline', 'Join us <for> the day');
+same('custom tagline', 'Join us <for> the day', tagline());
+[, , $taglineHtml] = render_invite(['name' => 'Sarah Jones', 'code' => 'K7MPX4QR'], mail_settings());
+check('the invitation email shows it, escaped', strpos($taglineHtml, 'Join us &lt;for&gt; the day') !== false && strpos($taglineHtml, '<for>') === false);
+save_setting('tagline', '');
+
 section('Uploading a CSV');
 same('headings, two email columns, notes ignored', [['Ali & Jo Khan', 'ali@example.com, jo@example.com'], ['Uncle Bob', '']],
     parse_guest_csv("Name,Email,Email 2,Notes\nAli & Jo Khan,ali@example.com,jo@example.com,Vegan\nUncle Bob,,,\n"));
@@ -352,6 +361,7 @@ foreach ($argv as $arg) {
     $csrf = fn($body) => preg_match('/name="csrf" value="([^"]+)"/', $body, $m) ? $m[1] : '';
 
     $home = $get('/');
+    check('code page shows the default tagline', strpos($home['body'], '<p class="eyebrow">You&#039;re invited</p>') !== false);
     check('home page loads', $home['status'] === 200 && strpos($home['body'], 'Alex &amp; Sam') !== false);
     check('date kept off the public home page', strpos($home['body'], WEDDING_DATE) === false);
     check('Content-Security-Policy sent', stripos($home['headers'], "content-security-policy: default-src 'self'") !== false);
@@ -439,6 +449,18 @@ foreach ($argv as $arg) {
     check('a signed-out session can\'t act', $forged['status'] !== 200 || strpos($forged['body'], 'Removed') === false);
     users_db()->prepare('DELETE FROM users WHERE id = ?')->execute([$joId]);
     @unlink($jar2);
+
+    // Tagline: set on the Invitation email tab, shown on the code page.
+    $emailTab = $get('/admin.php?tab=email');
+    $get('/admin.php', ['csrf' => $csrf($emailTab['body']), 'action' => 'save_email', 'tagline' => "  Save   the\ndate  "] + mail_settings());
+    $jar3 = tempnam(sys_get_temp_dir(), 'jar');
+    $ch = curl_init($base . '/');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_COOKIEJAR => $jar3, CURLOPT_COOKIEFILE => $jar3]);
+    check('a new tagline shows on the code page, tidied to one line', strpos((string)curl_exec($ch), '<p class="eyebrow">Save the date</p>') !== false);
+    @unlink($jar3);
+    $emailTab = $get('/admin.php?tab=email');
+    $get('/admin.php', ['csrf' => $csrf($emailTab['body']), 'action' => 'save_email', 'tagline' => ''] + mail_settings());
+    check('an empty tagline goes back to the default', tagline() === "You're invited");
 
     // Greetings: switch the site to first names, then give one invitation its own greeting.
     $form = $get('/admin.php?tab=guests');
