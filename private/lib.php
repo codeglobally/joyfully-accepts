@@ -24,7 +24,7 @@ const APP_DIR = __DIR__;
 
 // Bump this with every release. It's shown in the lightbox footer and also
 // makes browsers fetch fresh copies of the stylesheet and scripts.
-const SITE_VERSION = '2.3';
+const SITE_VERSION = '2.4';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';
