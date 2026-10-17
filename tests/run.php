@@ -525,8 +525,33 @@ foreach ($argv as $arg) {
     $after = $fresh('/admin.php?tab=guests');
     check('a password reset still asks for their passkey', strpos($after, 'confirm it\'s you with your passkey') !== false && strpos($after, 'Invitations (') === false);
     @unlink($jar4);
+    // The owner can switch anyone's feedback emails on the People tab; no one else can.
+    $kimId = (int)users_db()->query("SELECT id FROM users WHERE username = 'kim'")->fetchColumn();
+    $people = $get('/admin.php?tab=people');
+    check('People tab has a Feedback emails column', strpos($people['body'], '<th>Feedback emails</th>') !== false
+        && strpos($people['body'], 'aria-label="Email Kim when a guest sends a message"') !== false);
+    $get('/admin.php', ['csrf' => $csrf($people['body']), 'action' => 'user_feedback', 'id' => $kimId, 'notify_feedback' => '1']);
+    check('owner can switch someone\'s feedback emails on', admin_contact($kimId)['notify'] === true);
+    $people = $get('/admin.php?tab=people');
+    $get('/admin.php', ['csrf' => $csrf($people['body']), 'action' => 'user_feedback', 'id' => $kimId]);
+    check('...and off', admin_contact($kimId)['notify'] === false);
+    $people = $get('/admin.php?tab=people');
+    $get('/admin.php', ['csrf' => $csrf($people['body']), 'action' => 'user_feedback', 'id' => 0]);
+    check('owner can switch their own off', admin_contact(0)['notify'] === false);
+    users_db()->prepare('INSERT INTO users (name, username) VALUES (?, ?)')->execute(['Noemail', 'noemail']);
+    $noEmailId = (int)users_db()->lastInsertId();
+    $people = $get('/admin.php?tab=people');
+    $get('/admin.php', ['csrf' => $csrf($people['body']), 'action' => 'user_feedback', 'id' => $noEmailId, 'notify_feedback' => '1']);
+    check('no email address, can\'t be switched on', admin_contact($noEmailId)['notify'] === false
+        && strpos($get('/admin.php?tab=people')['body'], 'needs an email address first') !== false);
+    $as2('/admin.php');   // their old session ended with the reset; this clears it
+    $leeLogin = $as2('/admin.php');
     passkeys_db()->exec("DELETE FROM passkeys WHERE user_id = $leeId");
-    users_db()->exec("DELETE FROM users WHERE username IN ('lee', 'kim')");
+    $as2('/admin.php', ['csrf' => $csrf($leeLogin['body']), 'username' => 'lee', 'password' => 'lee-new-long-password', 'login' => '1']);
+    $leePage = $as2('/admin.php?tab=account');
+    $forbidden = $as2('/admin.php', ['csrf' => $csrf($leePage['body']), 'action' => 'user_feedback', 'id' => $kimId, 'notify_feedback' => '1']);
+    check('other admins can\'t switch other people\'s emails', $forbidden['status'] === 403 && admin_contact($kimId)['notify'] === false);
+    users_db()->exec("DELETE FROM users WHERE username IN ('lee', 'kim', 'noemail')");
     save_admin_contact(0, '', false);
     @unlink($jar2);
 

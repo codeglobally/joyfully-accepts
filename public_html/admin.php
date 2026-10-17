@@ -280,6 +280,21 @@ if (!isset($tabs[$tab])) {
     $tab = 'guests';
 }
 
+// The People tab's "Feedback emails" tick box for one person. Ticking it
+// saves straight away (admin.js); without JavaScript there's a Save button.
+function feedback_toggle(int $id, string $name, array $contact): string
+{
+    if (!valid_email($contact['email'])) {
+        return '<span class="hint">No email address</span>';
+    }
+    $label = 'Email ' . ($id === 0 ? 'you' : $name) . ' when a guest sends a message';
+    return '<form method="post" class="inline feedback-toggle" data-autosubmit>' . csrf_field()
+        . '<input type="hidden" name="action" value="user_feedback"><input type="hidden" name="id" value="' . $id . '">'
+        . '<label class="check"><input type="checkbox" name="notify_feedback" value="1"' . ($contact['notify'] ? ' checked' : '')
+        . ' aria-label="' . h($label) . '"> ' . ($contact['notify'] ? 'On' : 'Off') . '</label>'
+        . ' <button class="link small" data-autosubmit-button>Save</button></form>';
+}
+
 // --- Actions --------------------------------------------------------
 // Every action redirects afterwards, so refreshing the page can't repeat it
 // (important for sending emails).
@@ -679,6 +694,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : 'Passkey removed. You can now sign in with just your password, so consider adding another.';
 
     // --- People (owner only) ---
+    } elseif ($action === 'user_feedback') {
+        // Owner only: switch someone's feedback emails on or off from the People tab.
+        $back = 'people';
+        if (!is_owner()) {
+            http_response_code(403);
+            exit('Only the site owner can manage logins.');
+        }
+        $id = (int)input($_POST, 'id');
+        $on = input($_POST, 'notify_feedback') === '1';
+        $u = $id === 0 ? ['name' => 'You'] : find_user($id);
+        $contact = $u ? admin_contact($id) : null;
+        if (!$u) {
+            $message = 'That person no longer exists.';
+        } elseif ($on && !valid_email($contact['email'])) {
+            $message = $u['name'] . ' needs an email address first' . ($id === 0 ? ' (add it on Your account).' : ' (use Edit).');
+        } else {
+            save_admin_contact($id, $contact['email'], $on);
+            $message = ($id === 0 ? 'You' : $u['name']) . ($on ? ' will now get' : ' will no longer get') . ' an email when a guest sends a message.';
+        }
     } elseif (in_array($action, ['user_add', 'user_reset', 'user_remove', 'user_update'], true)) {
         $back = 'people';
         if (!is_owner()) {
@@ -1558,11 +1592,14 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     <?php endif; ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Status</th><th>Last signed in</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Status</th><th>Last signed in</th><th>Feedback emails</th><th></th></tr></thead>
         <tbody>
           <tr>
-            <td>You (owner)</td><td><code><?= OWNER_USERNAME ?></code></td><td>—</td>
+            <?php $ownerContact = admin_contact(0); ?>
+            <td>You (owner)</td><td><code><?= OWNER_USERNAME ?></code></td>
+            <td class="email-cell"><?= $ownerContact['email'] !== '' ? h($ownerContact['email']) : '—' ?></td>
             <td><span class="pill yes">Active</span></td><td>—</td>
+            <td><?= feedback_toggle(0, 'yourself', $ownerContact) ?></td>
             <td class="hint">Password set in config.php</td>
           </tr>
           <?php foreach ($users as $u):
@@ -1573,9 +1610,9 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
             <td><code><?= h($u['username']) ?></code></td>
             <td class="email-cell"><?= $u['email'] ? h($u['email']) : '—' ?></td>
             <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span>
-              <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= $keys ?> passkey<?= $keys === 1 ? '' : 's' ?></span><?php endif; ?>
-              <?php if ((int)($u['notify_feedback'] ?? 0) === 1 && valid_email($u['email'])): ?><span class="who">Gets feedback emails</span><?php endif; ?></td>
+              <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= $keys ?> passkey<?= $keys === 1 ? '' : 's' ?></span><?php endif; ?></td>
             <td><?= $u['last_login'] ? h(date('j M, H:i', strtotime($u['last_login'] . ' UTC'))) : '—' ?></td>
+            <td><?= feedback_toggle((int)$u['id'], $u['name'], admin_contact((int)$u['id'])) ?></td>
             <td class="row-actions">
               <a class="link small" href="/admin.php?tab=people&amp;edit_user=<?= (int)$u['id'] ?>#edit-user">Edit</a>
               <?php if (valid_email($u['email'])): ?>

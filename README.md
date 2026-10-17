@@ -47,7 +47,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 - **Invitation email:** styled HTML email with your photo, preview, test send, and send to everyone not yet emailed.
 - **Updates:** email news to everyone or a group (coming, not replied…), with templates, one-click unsubscribe and a history.
 - **Content:** add, edit, reorder, show or hide guest-page sections with simple formatting (bold, italic, headings, lists, links, text sizes) and preview.
-- **Feedback** inbox, with optional emails to each admin when a guest sends a message (replies go straight to the guest), and **People**: extra admin logins (e.g. your partner) via emailed setup links, with forgot-password.
+- **Feedback** inbox, with optional emails to each admin when a guest sends a message (replies go straight to the guest; the owner can switch them on or off for anyone on the People tab), and **People**: extra admin logins (e.g. your partner) via emailed setup links, with forgot-password.
 
 ## Requirements
 

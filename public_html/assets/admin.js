@@ -1,3 +1,11 @@
+// Small forms that save as soon as a box is ticked (data-autosubmit), such as
+// the People tab's feedback-email switches. Their Save buttons are only for
+// browsers without JavaScript.
+document.querySelectorAll('form[data-autosubmit]').forEach(function (form) {
+  form.querySelectorAll('[data-autosubmit-button]').forEach(function (b) { b.hidden = true; });
+  form.addEventListener('change', function () { form.submit(); });
+});
+
 // Account menu (top right): close it with Escape or by clicking elsewhere.
 document.querySelectorAll('details.account-menu').forEach(function (menu) {
   document.addEventListener('click', function (e) {
