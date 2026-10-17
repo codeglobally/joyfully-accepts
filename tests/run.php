@@ -255,6 +255,11 @@ if (function_exists('mb_convert_encoding')) {
     same('older Excel encoding converted', [['Zoë', 'zoe@example.com']], parse_guest_csv("Name,Email\nZo\xEB,zoe@example.com\n"));
 }
 
+section('Version');
+check('SITE_VERSION is MAJOR.MINOR.PATCH', (bool)preg_match('/^\d+\.\d+\.\d+$/', SITE_VERSION));
+check('README badge matches SITE_VERSION', strpos((string)file_get_contents(dirname(__DIR__) . '/README.md'), 'badge/version-' . SITE_VERSION . '-') !== false);
+check('CHANGELOG has this version', strpos((string)file_get_contents(dirname(__DIR__) . '/CHANGELOG.md'), '## ' . SITE_VERSION . "\n") !== false);
+
 section('Invitation codes');
 $code = generate_code();
 check('8 characters', strlen($code) === 8);

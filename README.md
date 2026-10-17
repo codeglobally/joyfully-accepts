@@ -1,6 +1,6 @@
 # Joyfully Accepts
 
-[![Version](https://img.shields.io/badge/version-2.4-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
+[![Version](https://img.shields.io/badge/version-2.5.0-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
 [![Tests](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml/badge.svg)](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml)
 [![Security](https://github.com/codeglobally/joyfully-accepts/actions/workflows/security.yml/badge.svg)](SECURITY.md)
 [![WCAG 2.1 AA](https://img.shields.io/badge/WCAG_2.1-AA-2e7d32)](#accessibility)
@@ -198,6 +198,7 @@ docs/screenshots/       Images for this README
 .zap/rules.tsv          Which ZAP scan findings fail the build
 psalm.xml               Settings for the Psalm taint analysis
 SECURITY.md             OWASP review and how to report a vulnerability
+CHANGELOG.md            What changed in each version
 CONTRIBUTING.md         How to help, run it locally and send changes
 CODE_OF_CONDUCT.md      How we treat each other, and how to report problems
 deploy.sh               One-command deploy to cPanel hosting
