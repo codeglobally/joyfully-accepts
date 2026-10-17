@@ -16,6 +16,16 @@ function content_db(): PDO
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_by TEXT
         )');
+        // Other languages' versions of a section (the main language is in sections).
+        $pdo->exec('CREATE TABLE IF NOT EXISTS section_translations (
+            section_id INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT \'\',
+            body TEXT NOT NULL DEFAULT \'\',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_by TEXT,
+            PRIMARY KEY (section_id, language)
+        )');
         seed_sections($pdo);
         $ready = true;
     }
@@ -49,6 +59,52 @@ function find_section(int $id): ?array
     $q = content_db()->prepare('SELECT * FROM sections WHERE id = ?');
     $q->execute([$id]);
     return $q->fetch() ?: null;
+}
+
+// --- Translations ----------------------------------------------------------
+// Each section is written in the site's own language; other languages can have
+// their own title and text. Anything left empty shows the main-language version.
+
+function section_translation(int $id, string $language): ?array
+{
+    $q = content_db()->prepare('SELECT * FROM section_translations WHERE section_id = ? AND language = ?');
+    $q->execute([$id, $language]);
+    return $q->fetch() ?: null;
+}
+
+// The languages a section has been translated into.
+function section_languages(int $id): array
+{
+    $q = content_db()->prepare('SELECT language FROM section_translations WHERE section_id = ? ORDER BY language');
+    $q->execute([$id]);
+    return $q->fetchAll(PDO::FETCH_COLUMN);
+}
+
+// Saves a translation; both empty removes it.
+function save_section_translation(int $id, string $language, string $title, string $body, string $by): void
+{
+    if ($title === '' && $body === '') {
+        content_db()->prepare('DELETE FROM section_translations WHERE section_id = ? AND language = ?')->execute([$id, $language]);
+        return;
+    }
+    content_db()->prepare('INSERT OR REPLACE INTO section_translations (section_id, language, title, body, updated_at, updated_by)
+                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)')->execute([$id, $language, $title, $body, $by]);
+}
+
+// Sections as a guest reading $language sees them.
+function localise_sections(array $sections, string $language): array
+{
+    if ($language === site_language()) {
+        return $sections;
+    }
+    foreach ($sections as $i => $s) {
+        $t = section_translation((int)$s['id'], $language);
+        if ($t) {
+            $sections[$i]['title'] = $t['title'] !== '' ? $t['title'] : $s['title'];
+            $sections[$i]['body'] = $t['body'] !== '' ? $t['body'] : $s['body'];
+        }
+    }
+    return $sections;
 }
 
 // Starting points offered by "Add a section".

@@ -416,19 +416,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (in_array($action, ['save_email', 'preview', 'send_test', 'send_all'], true)) {
         $back = 'email';
-        // The email form's buttons all save the template first.
-        foreach (['from_name', 'from', 'reply_to', 'subject', 'body'] as $field) {
-            save_setting('mail_' . $field, trim(str_replace("\r\n", "\n", input($_POST, $field))));
+        // Which language's version is being edited; From and Reply-to are
+        // shared, so they're only saved from the main language's form.
+        $mailLang = valid_language(input($_POST, 'lang')) ? input($_POST, 'lang') : site_language();
+        if ($mailLang !== site_language()) {
+            $backExtra = '&lang=' . urlencode($mailLang);
+        } else {
+            foreach (['from_name', 'from', 'reply_to'] as $field) {
+                save_setting('mail_' . $field, trim(input($_POST, $field)));
+            }
         }
+        // The email form's buttons all save the wording first.
+        save_wording('mail_subject', $mailLang, str_replace(["\r", "\n"], ' ', input($_POST, 'subject')));
+        save_wording('mail_body', $mailLang, input($_POST, 'body'));
         // One line, at most 60 characters; empty goes back to the default.
         preg_match('/^.{0,60}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'tagline'))), $m);
-        save_setting('tagline', trim($m[0] ?? ''));
+        save_wording('tagline', $mailLang, trim($m[0] ?? ''));
         if ($action === 'preview') {
-            header('Location: /admin.php?preview=1');   // opens in its own tab
+            header('Location: /admin.php?preview=1&lang=' . urlencode($mailLang));   // opens in its own tab
             exit;
         }
         $settings = mail_settings();
-        $message = 'Email saved.';
+        $message = $mailLang === site_language() ? 'Email saved.' : 'Saved the ' . LANGUAGE_NAMES[$mailLang] . ' version.';
 
         if (!valid_email($settings['from'])) {
             $message = 'Email saved, but the From address isn\'t valid, so nothing was sent.';
@@ -436,7 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!valid_email($settings['reply_to'])) {
                 $message = 'Add your own email under "Replies go to" so the test has somewhere to go.';
             } else {
-                $sample = ['name' => 'Test Guest', 'email' => $settings['reply_to'], 'code' => 'TEST1234'];
+                $sample = ['name' => 'Test Guest', 'email' => $settings['reply_to'], 'code' => 'TEST1234', 'language' => $mailLang];
                 $message = send_invite($sample, $settings)
                     ? 'Test sent to ' . $settings['reply_to'] . '.'
                     : 'The test could not be sent. Check the From address is an email account on your domain.';
@@ -513,12 +522,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'subject' => trim(str_replace(["\r", "\n"], ' ', input($_POST, 'subject'))),
             'body' => trim(str_replace("\r\n", "\n", input($_POST, 'body'))),
             'template_id' => (int)input($_POST, 'template_id'),
+            'translations' => clean_translations($_POST['tr'] ?? []),
         ];
         $_SESSION['update_draft'] = $draft;   // keep the form filled in after the redirect
         $settings = mail_settings();
+        $translationsJson = $draft['translations'] ? json_encode($draft['translations'], JSON_UNESCAPED_UNICODE) : null;
 
         if ($action === 'notify_preview') {
-            header('Location: /admin.php?preview_update=1');   // opens in its own tab
+            $lang = valid_language(input($_GET, 'preview_lang')) ? input($_GET, 'preview_lang') : site_language();
+            header('Location: /admin.php?preview_update=1&lang=' . urlencode($lang));   // opens in its own tab
             exit;
         } elseif ($action === 'template_delete') {
             $t = find_template((int)input($_POST, 'delete_id'));
@@ -532,13 +544,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim(input($_POST, 'template_name'));
             $existing = $action === 'template_save' ? find_template($draft['template_id']) : null;
             if ($existing) {
-                notify_db()->prepare('UPDATE email_templates SET subject = ?, body = ? WHERE id = ?')
-                    ->execute([$draft['subject'], $draft['body'], $existing['id']]);
+                notify_db()->prepare('UPDATE email_templates SET subject = ?, body = ?, translations = ? WHERE id = ?')
+                    ->execute([$draft['subject'], $draft['body'], $translationsJson, $existing['id']]);
                 $message = "Updated the \"{$existing['name']}\" template.";
             } else {
                 $name = $name !== '' ? $name : $draft['subject'];
-                notify_db()->prepare('INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)')
-                    ->execute([$name, $draft['subject'], $draft['body']]);
+                notify_db()->prepare('INSERT INTO email_templates (name, subject, body, translations) VALUES (?, ?, ?, ?)')
+                    ->execute([$name, $draft['subject'], $draft['body'], $translationsJson]);
                 $_SESSION['update_draft']['template_id'] = (int)notify_db()->lastInsertId();
                 $message = "Saved as a new template, \"$name\".";
             }
@@ -559,7 +571,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent = 0;
             $failed = [];
             foreach ($recipients as $g) {
-                if (send_update($g, $draft['subject'], $draft['body'])) {
+                if (send_update($g, $draft['subject'], $draft['body'], $draft['translations'])) {
                     $sent++;
                 } else {
                     $failed[] = $g['name'];
@@ -596,7 +608,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $title = trim(input($_POST, 'title'));
         $body = trim(str_replace("\r\n", "\n", input($_POST, 'body')));
         $visible = input($_POST, 'visible') === '1' ? 1 : 0;
-        if ($action === 'section_preview' || $title === '') {
+        // Another language's version of an existing section.
+        $lang = input($_POST, 'lang');
+        $translating = $id && find_section($id) && valid_language($lang) && $lang !== site_language();
+        if ($translating) {
+            if ($action === 'section_preview') {
+                $_SESSION['section_draft'] = compact('id', 'title', 'body', 'visible', 'lang');
+                $backExtra = '&section=' . $id . '&lang=' . urlencode($lang) . '&show_preview=1#editor';
+            } else {
+                save_section_translation($id, $lang, $title, $body, $me['name']);
+                unset($_SESSION['section_draft']);
+                $message = $title === '' && $body === ''
+                    ? 'Removed the ' . LANGUAGE_NAMES[$lang] . ' version. Guests reading ' . LANGUAGE_NAMES[$lang] . ' see the main version.'
+                    : 'Saved the ' . LANGUAGE_NAMES[$lang] . ' version.';
+                $backExtra = '&section=' . $id . '&lang=' . urlencode($lang) . '#editor';
+            }
+        } elseif ($action === 'section_preview' || $title === '') {
             // Keep the unsaved draft and reopen the editor.
             $_SESSION['section_draft'] = compact('id', 'title', 'body', 'visible');
             $backExtra = '&section=' . ($id ?: 'new') . ($action === 'section_preview' ? '&show_preview=1' : '') . '#editor';
@@ -640,6 +667,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $s = find_section((int)input($_POST, 'id'));
         if ($s) {
             content_db()->prepare('DELETE FROM sections WHERE id = ?')->execute([$s['id']]);
+            content_db()->prepare('DELETE FROM section_translations WHERE section_id = ?')->execute([$s['id']]);
             $message = 'Deleted "' . $s['title'] . '".';
         }
 
@@ -797,9 +825,10 @@ $guests = db()->query('SELECT * FROM guests ORDER BY name COLLATE NOCASE')->fetc
 // --- Email preview (opened in a new tab) ----------------------------
 
 if (isset($_GET['preview'])) {
-    $settings = mail_settings();
+    $previewLang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
+    $settings = mail_settings($previewLang);
     $sample = ['name' => 'Sarah & Tom Jones', 'code' => 'K7MPX4QR'];
-    [$subject, , $html] = render_invite($sample, $settings, email_photo_url());
+    [$subject, , $html] = in_language($previewLang, fn() => render_invite($sample, $settings, email_photo_url()));
     // The email uses inline styles, which the site's normal policy blocks.
     header("Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
     $bar = '<div style="position:sticky;top:0;padding:10px 16px;background:#18181b;color:#fff;'
@@ -813,8 +842,10 @@ if (isset($_GET['preview'])) {
 
 if (isset($_GET['preview_update'])) {
     $draft = $_SESSION['update_draft'] ?? ['subject' => '', 'body' => ''];
+    $lang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
+    [$subject, $body] = update_version($lang, $draft['subject'], $draft['body'], $draft['translations'] ?? []);
     $sample = ['name' => 'Sarah & Tom Jones', 'code' => 'K7MPX4QR'];
-    [$subject, , $html] = render_update($sample, $draft['subject'], $draft['body'], email_photo_url());
+    [$subject, , $html] = in_language($lang, fn() => render_update($sample, $subject, $body, email_photo_url()));
     header("Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
     $bar = '<div style="position:sticky;top:0;padding:10px 16px;background:#18181b;color:#fff;'
         . 'font:14px Helvetica,Arial,sans-serif">Preview &middot; Subject: <strong>' . h($subject) . '</strong>'
@@ -1261,34 +1292,73 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
 <?php elseif ($tab === 'email'): ?>
 
+  <?php
+  $mailLang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
+  $isMainLang = $mailLang === site_language();
+  $here = mail_settings($mailLang);                       // what guests reading this language get now
+  $ownTagline = $isMainLang ? own_wording('tagline', $mailLang) : trim(setting('tagline.' . $mailLang));
+  $fieldDir = 'lang="' . h($mailLang) . '" dir="' . (is_rtl($mailLang) ? 'rtl' : 'ltr') . '"';
+  // Where this language's wording comes from, for the hint.
+  $source = function (string $key) use ($mailLang, $isMainLang): string {
+      if (!$isMainLang && trim(setting($key . '.' . $mailLang)) !== '') {
+          return 'your ' . LANGUAGE_NAMES[$mailLang] . ' version';
+      }
+      if (own_wording($key, site_language()) !== '') {
+          return $isMainLang ? 'your own wording' : 'your ' . LANGUAGE_NAMES[site_language()] . ' version (not translated yet)';
+      }
+      return 'the built-in ' . LANGUAGE_NAMES[$mailLang] . ' text';
+  };
+  ?>
   <section class="card">
     <h2>Invitation email</h2>
+    <?php if (count(site_languages()) > 1): ?>
+      <nav class="lang-tabs" aria-label="Language of this version">
+        <?php foreach (site_languages() as $code): $isMain = $code === site_language();
+            $done = !$isMain && (trim(setting('mail_subject.' . $code)) !== '' || trim(setting('mail_body.' . $code)) !== '' || trim(setting('tagline.' . $code)) !== ''); ?>
+          <a href="/admin.php?tab=email<?= $isMain ? '' : '&amp;lang=' . h($code) ?>" lang="<?= h($code) ?>"
+             <?= $code === $mailLang ? 'aria-current="page"' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?><?php
+             if ($isMain): ?> <span class="hint">(main)</span><?php elseif ($done): ?> <span class="tick" aria-label="translated">✓</span><?php endif; ?></a>
+        <?php endforeach; ?>
+      </nav>
+    <?php endif; ?>
     <form method="post" class="email-form">
       <?= csrf_field() ?>
+      <input type="hidden" name="lang" value="<?= h($mailLang) ?>">
+      <?php if ($isMainLang): ?>
       <div class="field-row">
         <label>From name<input type="text" name="from_name" value="<?= h($mail['from_name']) ?>"></label>
         <label>From address<input type="email" name="from" value="<?= h($mail['from']) ?>"></label>
         <label>Replies go to<input type="email" name="reply_to" value="<?= h($mail['reply_to']) ?>" placeholder="you@example.com"></label>
       </div>
       <p class="hint">The From address should be an email account on your wedding domain, so emails aren't marked as spam. Replies and tests go to the "Replies go to" address.</p>
-      <label>Tagline<input type="text" name="tagline" value="<?= h(setting('tagline')) ?>" maxlength="60"
-        placeholder="<?= h(DEFAULT_TAGLINE) ?>" aria-describedby="tagline-hint"></label>
+      <?php else: ?>
+      <p class="hint">Guests reading <?= h(LANGUAGE_NAMES[$mailLang]) ?> get this version. Leave a box empty to use
+        <?= h(LANGUAGE_NAMES[site_language()]) ?> wording you've written, or the built-in <?= h(LANGUAGE_NAMES[$mailLang]) ?> text if you haven't.
+        Guests whose language isn't known yet get the <?= h(LANGUAGE_NAMES[site_language()]) ?> version.</p>
+      <?php endif; ?>
+      <label>Tagline<input type="text" name="tagline" value="<?= h($ownTagline) ?>" maxlength="60" <?= $fieldDir ?>
+        placeholder="<?= h(in_language($mailLang, 'tagline')) ?>" aria-describedby="tagline-hint"></label>
       <p class="hint" id="tagline-hint">The short line above your names, on the page where guests enter their code and at
-        the top of this email. Leave it empty for "<?= h(DEFAULT_TAGLINE) ?>". For example: <em>Save the date</em>,
+        the top of this email. Now showing <?= h($source('tagline')) ?>. For example: <em>Save the date</em>,
         <em>Join us</em> or <em>We're getting married</em>.</p>
-      <label>Subject<input type="text" name="subject" value="<?= h($mail['subject']) ?>"></label>
+      <label>Subject<input type="text" name="subject" <?= $fieldDir ?>
+        value="<?= h($isMainLang ? $here['subject'] : trim(setting('mail_subject.' . $mailLang))) ?>"
+        placeholder="<?= h($here['subject']) ?>"></label>
       <label>Message
-        <textarea name="body" rows="12"><?= h($mail['body']) ?></textarea>
+        <textarea name="body" rows="12" <?= $fieldDir ?> placeholder="<?= h($isMainLang ? '' : $here['body']) ?>"><?= h($isMainLang ? $here['body'] : trim(setting('mail_body.' . $mailLang))) ?></textarea>
       </label>
-      <p class="hint"><code>{name}</code>, <code>{link}</code> and <code>{code}</code> are filled in for each guest. In the email, the link appears as a button.</p>
+      <p class="hint"><code>{name}</code>, <code>{link}</code> and <code>{code}</code> are filled in for each guest. In the email, the link appears as a button.
+        The message is now <?= h($source('mail_body')) ?>.</p>
       <div class="actions">
         <button type="submit" name="action" value="save_email" class="secondary">Save</button>
         <button type="submit" name="action" value="preview" class="secondary" formtarget="_blank">Preview</button>
         <button type="submit" name="action" value="send_test" class="secondary">Send test to me</button>
+        <?php if ($isMainLang): ?>
         <button type="submit" name="action" value="send_all" <?= $unsent ? '' : 'disabled' ?>
-                data-confirm="Send the invitation to <?= $unsent ?> <?= $unsent === 1 ? 'guest' : 'guests' ?>?">
+                data-confirm="Send the invitation to <?= $unsent ?> <?= $unsent === 1 ? 'guest' : 'guests' ?>? Each gets it in their own language.">
           Send to <?= $unsent ?> not yet emailed
         </button>
+        <?php endif; ?>
       </div>
     </form>
   </section>
@@ -1297,10 +1367,12 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     $templates = all_templates();
     $draft = $_SESSION['update_draft'] ?? null;
     if ($t = find_template((int)input($_GET, 'template'))) {
-        $draft = ['audience' => $draft['audience'] ?? 'all', 'subject' => $t['subject'], 'body' => $t['body'], 'template_id' => (int)$t['id']];
+        $draft = ['audience' => $draft['audience'] ?? 'all', 'subject' => $t['subject'], 'body' => $t['body'],
+            'template_id' => (int)$t['id'], 'translations' => template_translations($t)];
         $_SESSION['update_draft'] = $draft;
     }
-    $draft = $draft ?? ['audience' => 'all', 'subject' => '', 'body' => '', 'template_id' => 0];
+    $draft = ($draft ?? []) + ['audience' => 'all', 'subject' => '', 'body' => '', 'template_id' => 0, 'translations' => []];
+    $otherLanguages = array_values(array_diff(site_languages(), [site_language()]));
     $current = find_template((int)$draft['template_id']);
     $history = recent_notifications();
     $optedOut = (int)db()->query('SELECT COUNT(*) FROM guests WHERE notify = 0')->fetchColumn();
@@ -1330,6 +1402,22 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         <textarea name="body" rows="12"><?= h($draft['body']) ?></textarea>
       </label>
       <p class="hint"><code>{name}</code>, <code>{link}</code> and <code>{code}</code> are filled in for each guest. In the email, the link appears as a button.</p>
+      <?php if ($otherLanguages): $written = count(array_filter($draft['translations'], fn($tr) => $tr['body'] !== '')); ?>
+        <details class="translations">
+          <summary>Translations (<?= $written ?> of <?= count($otherLanguages) ?>)</summary>
+          <p class="hint">Each guest gets the version in their language. Where there isn't one, they get the message above. The wording around it, such as the unsubscribe line, is always in their language.</p>
+          <?php foreach ($otherLanguages as $code): $tr = $draft['translations'][$code] ?? ['subject' => '', 'body' => '']; ?>
+            <details class="translation">
+              <summary><bdi lang="<?= h($code) ?>"><?= h(LANGUAGE_NAMES[$code]) ?></bdi><?= $tr['body'] !== '' ? ' <span class="tick" aria-label="written">✓</span>' : '' ?></summary>
+              <div lang="<?= h($code) ?>" dir="<?= in_array($code, RTL_LANGUAGES, true) ? 'rtl' : 'ltr' ?>">
+                <label><span lang="en" dir="ltr">Subject</span><input type="text" name="tr[<?= h($code) ?>][subject]" value="<?= h($tr['subject']) ?>"></label>
+                <label><span lang="en" dir="ltr">Message</span><textarea name="tr[<?= h($code) ?>][body]" rows="10"><?= h($tr['body']) ?></textarea></label>
+              </div>
+              <button type="submit" name="action" value="notify_preview" class="secondary" formtarget="_blank" formaction="/admin.php?preview_lang=<?= h($code) ?>">Preview in <bdi lang="<?= h($code) ?>"><?= h(LANGUAGE_NAMES[$code]) ?></bdi></button>
+            </details>
+          <?php endforeach; ?>
+        </details>
+      <?php endif; ?>
       <div class="actions">
         <button type="submit" name="action" value="notify_preview" class="secondary" formtarget="_blank">Preview</button>
         <button type="submit" name="action" value="notify_test" class="secondary">Send test to me</button>
@@ -1447,7 +1535,17 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         } elseif ($s = find_section((int)$sectionParam)) {
             $editing = $s;
         }
-        if ($editing && $draft && (int)$draft['id'] === (int)$editing['id'] && !isset($templates[$newTemplate])) {
+        // Editing another language's version: start from the saved translation.
+        $editLang = input($_GET, 'lang');
+        if ($editing && $editing['id'] && valid_language($editLang) && $editLang !== site_language()) {
+            $main = $editing;
+            $tr = section_translation((int)$editing['id'], $editLang);
+            $editing = ['id' => $editing['id'], 'title' => $tr['title'] ?? '', 'body' => $tr['body'] ?? '', 'visible' => $editing['visible']];
+        } else {
+            $editLang = site_language();
+        }
+        if ($editing && $draft && (int)$draft['id'] === (int)$editing['id'] && !isset($templates[$newTemplate])
+            && ($draft['lang'] ?? site_language()) === $editLang) {
             $editing = array_merge($editing, $draft);
         }
     }
@@ -1459,6 +1557,22 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
   <?php if ($editing): ?>
   <section class="card" id="editor">
     <h2><?= $editing['id'] ? 'Edit section' : 'New section' ?></h2>
+    <?php if ($editing['id'] && count(site_languages()) > 1): $done = section_languages((int)$editing['id']); ?>
+      <nav class="lang-tabs" aria-label="Language of this version">
+        <?php foreach (site_languages() as $code): $isMain = $code === site_language(); ?>
+          <a href="/admin.php?tab=content&amp;section=<?= (int)$editing['id'] ?><?= $isMain ? '' : '&amp;lang=' . h($code) ?>#editor"
+             lang="<?= h($code) ?>" <?= $code === $editLang ? 'aria-current="page"' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?><?php
+             if ($isMain): ?> <span class="hint">(main)</span><?php elseif (in_array($code, $done, true)): ?> <span class="tick" aria-label="translated">✓</span><?php endif; ?></a>
+        <?php endforeach; ?>
+      </nav>
+      <?php if ($editLang !== site_language()): ?>
+        <p class="hint">Write the <?= h(LANGUAGE_NAMES[$editLang]) ?> version for guests reading <?= h(LANGUAGE_NAMES[$editLang]) ?>.
+          Leave the title or text empty to use the main version for that part; clear both and save to remove this version.</p>
+        <details class="main-version"><summary>Show the main version</summary>
+          <div class="card rich"><h2><?= h($main['title']) ?></h2><?= render_markdown($main['body']) ?></div>
+        </details>
+      <?php endif; ?>
+    <?php endif; ?>
     <?php if (input($_GET, 'show_preview') === '1'): ?>
       <div class="section-preview">
         <p class="hint">Preview (not saved yet)</p>
@@ -1471,7 +1585,10 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     <form method="post" class="email-form section-form">
       <?= csrf_field() ?>
       <input type="hidden" name="id" value="<?= (int)$editing['id'] ?>">
-      <label>Title<input type="text" name="title" value="<?= h($editing['title']) ?>" placeholder="e.g. Where to stay" required></label>
+      <?php $isTranslation = $editing['id'] && $editLang !== site_language(); ?>
+      <?php if ($isTranslation): ?><input type="hidden" name="lang" value="<?= h($editLang) ?>"><?php endif; ?>
+      <label>Title<input type="text" name="title" value="<?= h($editing['title']) ?>" lang="<?= h($editLang) ?>" dir="<?= is_rtl($editLang) ? 'rtl' : 'ltr' ?>"
+        placeholder="<?= $isTranslation ? h($main['title']) : 'e.g. Where to stay' ?>" <?= $isTranslation ? '' : 'required' ?>></label>
       <label for="section-body">Text</label>
       <div class="md-toolbar" role="toolbar" aria-label="Formatting">
         <button type="button" data-md="bold" title="Bold"><strong>B</strong></button>
@@ -1486,14 +1603,18 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
           <option value="xlarge">Extra large</option>
         </select>
       </div>
-      <textarea id="section-body" name="body" rows="14" data-md-target><?= h($editing['body']) ?></textarea>
+      <textarea id="section-body" name="body" rows="14" data-md-target lang="<?= h($editLang) ?>" dir="<?= is_rtl($editLang) ? 'rtl' : 'ltr' ?>"><?= h($editing['body']) ?></textarea>
       <p class="hint">
         A blank line starts a new paragraph. <code>## </code> at the start of a line makes a subheading,
         <code>- </code> makes a bullet point, <code>**bold**</code>, <code>*italic*</code>,
         links look like <code>[Book a room](https://example.com)</code>, and
         <code>[large]text[/large]</code> changes the size (also <code>small</code> and <code>xlarge</code>).
       </p>
+      <?php if ($isTranslation): ?>
+        <input type="hidden" name="visible" value="<?= $editing['visible'] ? '1' : '0' ?>">
+      <?php else: ?>
       <label class="check"><input type="checkbox" name="visible" value="1" <?= $editing['visible'] ? 'checked' : '' ?>> Show on the guest page</label>
+      <?php endif; ?>
       <div class="actions">
         <button type="submit" name="action" value="section_save">Save</button>
         <button type="submit" name="action" value="section_preview" class="secondary">Preview</button>
@@ -1518,7 +1639,10 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         <tbody>
         <?php foreach ($sections as $i => $s): ?>
           <tr <?= $editing && (int)$editing['id'] === (int)$s['id'] ? 'class="editing"' : '' ?>>
-            <td class="name-cell"><strong><?= h($s['title']) ?></strong></td>
+            <td class="name-cell"><strong><?= h($s['title']) ?></strong>
+              <?php if (count(site_languages()) > 1): $langs = section_languages((int)$s['id']); $want = count(site_languages()) - 1; ?>
+                <span class="greeted-as"><?= count(array_intersect($langs, site_languages())) ?> of <?= $want ?> translations</span>
+              <?php endif; ?></td>
             <td><span class="pill <?= $s['visible'] ? 'yes' : 'waiting' ?>"><?= $s['visible'] ? 'Shown' : 'Hidden' ?></span></td>
             <td><?= h(date('j M', strtotime($s['updated_at'] . ' UTC'))) ?><?= $s['updated_by'] ? ' by ' . h($s['updated_by']) : '' ?></td>
             <td class="row-actions">

@@ -102,7 +102,7 @@ $comingNow = $status === 'yes' ? attendees($guest)['names'] : $members;
 $savedMessages = ['yes' => t('rsvp.saved_yes'), 'no' => t('rsvp.saved_no'), 'maybe' => t('rsvp.saved_maybe')];
 
 // Sections are managed in admin on the Content tab.
-$sections = all_sections(true);
+$sections = localise_sections(all_sections(true), current_language());
 
 page_header(COUPLE_NAMES, has_photo() ? 'photo-bg guest-page' : 'guest-page');
 ?>

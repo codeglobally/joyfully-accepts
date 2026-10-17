@@ -123,4 +123,32 @@ return [
     'notfound.hint' => 'The link may have a typo, or the page has moved.',
     'notfound.back_invitation' => 'Back to your invitation',
     'notfound.back_home' => 'Back to the invitation',
+
+    // Defaults for your own wording, until you change it (Invitation email tab).
+    'date.short' => '{day} {month} {year}',
+    'home.tagline_default' => "You're invited",
+    'email.invite_subject' => "You're invited: {couple}, {date}",
+    'email.invite_body' => "Dear {name},\n\nWe're getting married, and we'd love you to be there.\n\nPlease let us know if you can come by visiting our wedding website:\n\n{link}\n\nYour invitation code is {code}, in case you need to type it in.\n\nWe'll add details about the day, hotels and travel to the site over the coming months.\n\nWith love,\n{couple}",
+    'email.view_invitation' => 'View your invitation',
+    'email.link_help' => "If the button doesn't work, copy this link into your browser:",
+
+    // Update emails: starter templates (name, subject, text) and the email's own wording.
+    'tpl.reminder.name' => "Reminder to reply",
+    'tpl.reminder.subject' => "Will you be joining us? {couple}",
+    'tpl.reminder.body' => "Dear {name},\n\nJust a gentle reminder to let us know if you can make it to our wedding.\n\n{link}\n\nYour invitation code is {code}.\n\nWith love,\n{couple}",
+    'tpl.hotels.name' => "Hotels and travel",
+    'tpl.hotels.subject' => "Where to stay for our wedding",
+    'tpl.hotels.body' => "Dear {name},\n\nWe've added hotel and travel details to the wedding website.\n\n{link}\n\nYour invitation code is {code}, in case you need it.\n\nWith love,\n{couple}",
+    'tpl.timings.name' => "Timings for the day",
+    'tpl.timings.subject' => "Timings for the big day",
+    'tpl.timings.body' => "Dear {name},\n\nThe timings for the day are now on the wedding website.\n\n{link}\n\nYour invitation code is {code}.\n\nWith love,\n{couple}",
+    'tpl.nudge.name' => "Not sure yet nudge",
+    'tpl.nudge.subject' => "Any news? {couple}",
+    'tpl.nudge.body' => "Dear {name},\n\nYou said you'd let us know if you can come. No rush, but when you know, you can update your reply here:\n\n{link}\n\nYour invitation code is {code}.\n\nWith love,\n{couple}",
+    'tpl.blank.name' => "Blank",
+    'tpl.blank.subject' => "",
+    'tpl.blank.body' => "Dear {name},\n\n\n\n{link}\n\nYour invitation code is {code}.\n\nWith love,\n{couple}",
+    'email.news_from' => "News from {couple}",
+    'email.updates_reason' => "You're getting this because you're invited to our wedding.",
+    'email.stop_updates' => "Stop these updates",
 ];

@@ -377,12 +377,69 @@ function initials(string $name): string
 
 // The short line above the couple's names on the code-entry page and at the
 // top of the invitation email. Set on the Invitation email tab.
-const DEFAULT_TAGLINE = "You're invited";
-
 function tagline(): string
 {
-    $tagline = trim(setting('tagline'));
-    return $tagline !== '' ? $tagline : DEFAULT_TAGLINE;
+    return own_wording('tagline', current_language()) ?: default_wording('tagline');
+}
+
+// --- Your wording in each language ----------------------------------------
+// The tagline and the invitation email's subject and text start as built-in
+// defaults, which are translated. Once you change them, your version is used:
+// in a language you've written a version for, that version; otherwise your
+// main-language version. Saved text that matches the default counts as the
+// default, so it keeps translating.
+
+// Your version of $key ('tagline', 'mail_subject', 'mail_body') for guests
+// reading $language, or '' if it should be the (translated) default.
+function own_wording(string $key, string $language): string
+{
+    if ($language !== site_language()) {
+        $own = trim(setting($key . '.' . $language));
+        if ($own !== '') {
+            return $own;
+        }
+    }
+    $main = trim(str_replace("\r\n", "\n", setting($key)));
+    return $main !== '' && $main !== in_language(site_language(), fn() => default_wording($key)) ? $main : '';
+}
+
+// The built-in default for $key, in the current language.
+function default_wording(string $key): string
+{
+    switch ($key) {
+        case 'tagline':
+            return t('home.tagline_default');
+        case 'mail_subject':
+            return t('email.invite_subject', ['couple' => COUPLE_NAMES, 'date' => subject_date()]);
+        case 'mail_body':
+            return t('email.invite_body', ['couple' => COUPLE_NAMES]);
+    }
+    return '';
+}
+
+// The wedding date without the weekday, for an email subject.
+function subject_date(): string
+{
+    $time = strtotime(WEDDING_DATE);
+    if (current_language() === site_language() || !$time) {
+        return (string)preg_replace('/^\w+day,? /', '', WEDDING_DATE);
+    }
+    $date = (new DateTimeImmutable('@' . $time))->setTimezone(new DateTimeZone('Europe/London'));
+    $months = t_list('date.months');
+    return t('date.short', ['day' => number_text($date->format('j')), 'month' => $months[(int)$date->format('n') - 1] ?? '',
+        'year' => number_text($date->format('Y'))]);
+}
+
+// Saves your version of $key for $language. Text matching the default is
+// stored as '' so it keeps translating.
+function save_wording(string $key, string $language, string $text): void
+{
+    $text = trim(str_replace("\r\n", "\n", $text));
+    if ($language === site_language()) {
+        save_setting($key, $text === in_language($language, fn() => default_wording($key)) ? '' : $text);
+    } else {
+        save_setting($key . '.' . $language, $text);
+    }
 }
 
 // The site-wide choice: 'full' (the default) or 'first'.

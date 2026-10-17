@@ -542,6 +542,12 @@ td .who { display: block; margin-top: 4px; font-size: 0.8rem; color: var(--muted
 .updates .choice input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
 .updates .hint { margin: -2px 0 0; font-size: 0.85rem; color: var(--muted); }
 .chip-link.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.translations { margin: 16px 0; }
+.translations summary { cursor: pointer; font-weight: 600; }
+.translation { border-bottom: 1px solid var(--line); padding: 10px 0; }
+.translation summary { cursor: pointer; }
+.translation .tick { color: #2e7d32; }
+.translation[open] summary { margin-bottom: 8px; }
 .save-template { margin-top: 16px; }
 .save-template summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .save-template .actions { margin-top: 10px; align-items: center; }
@@ -973,3 +979,15 @@ html[lang="ar"] .not-found .quip, html[lang^="zh"] .not-found .quip { font-style
 }
 .language-list button[aria-current="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .language-list button:hover { filter: none; border-color: var(--accent); }
+
+/* Admin: choosing which language's version of something to edit. */
+.lang-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.lang-tabs a {
+  padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.88rem;
+  color: var(--ink); text-decoration: none; background: var(--card);
+}
+.lang-tabs a[aria-current="page"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.lang-tabs .tick { color: #2e7d32; }
+.main-version { margin: 0 0 14px; }
+.main-version summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+.main-version .card { margin-top: 8px; }

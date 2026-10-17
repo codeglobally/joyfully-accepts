@@ -228,6 +228,72 @@ check('owner contact saved', admin_contact(0) === ['email' => 'couple@example.co
 users_db()->exec("DELETE FROM users WHERE username IN ('pat', 'kim', 'new', 'same')");
 save_admin_contact(0, '', false);
 
+section('Your wording in each language');
+foreach (['mail_subject', 'mail_body', 'tagline'] as $k) { save_setting($k, ''); foreach (array_keys(LANGUAGE_NAMES) as $c) { save_setting("$k.$c", ''); } }
+save_setting('mail_subject', "You're invited: " . COUPLE_NAMES . ', 9 September 2028');   // what older versions saved: the default
+same('a saved default still translates', 'Estás invitado: ' . COUPLE_NAMES . ', 9 de septiembre de 2028', mail_settings('es')['subject']);
+save_wording('mail_subject', 'en', "You're invited: " . COUPLE_NAMES . ', 9 September 2028');
+same('saving the default stores nothing', '', setting('mail_subject'));
+save_wording('mail_subject', 'en', 'Come and celebrate with us!');
+same('your own wording is used for untranslated languages', 'Come and celebrate with us!', mail_settings('es')['subject']);
+save_wording('mail_subject', 'es', '¡Ven a celebrarlo con nosotros!');
+same('a translation is used where there is one', '¡Ven a celebrarlo con nosotros!', mail_settings('es')['subject']);
+same('...and only for its language', 'Come and celebrate with us!', mail_settings('de')['subject']);
+check('default message translated, with its placeholders', strpos(mail_settings('fr')['body'], 'Bonjour {name},') === 0
+    && strpos(mail_settings('fr')['body'], '{link}') !== false && strpos(mail_settings('fr')['body'], '{code}') !== false);
+same('default tagline translated', 'Sie sind eingeladen', in_language('de', 'tagline'));
+save_wording('tagline', 'en', 'Save the date');
+save_wording('tagline', 'fr', 'Réservez la date');
+same('tagline: translation', 'Réservez la date', in_language('fr', 'tagline'));
+same('tagline: own wording where untranslated', 'Save the date', in_language('es', 'tagline'));
+[$arSubject, $arText, $arHtml] = in_language('ar', fn() => render_invite(['name' => 'Sara', 'code' => 'K7MPX4QR'], mail_settings('ar')));
+check('an Arabic invitation is right-to-left, in Arabic', strpos($arHtml, '<html lang="ar" dir="rtl">') !== false
+    && strpos($arHtml, 'عرض دعوتكم') !== false && strpos($arHtml, 'السبت 9 سبتمبر 2028') !== false && strpos($arText, 'أعزّاءنا Sara') === 0);
+foreach (['mail_subject', 'mail_body', 'tagline'] as $k) { save_setting($k, ''); foreach (array_keys(LANGUAGE_NAMES) as $c) { save_setting("$k.$c", ''); } }
+$secId = (int)content_db()->query('SELECT id FROM sections ORDER BY id LIMIT 1')->fetchColumn();
+$mainSec = find_section($secId);
+save_section_translation($secId, 'es', 'El día', '', 'Test');
+$esSec = localise_sections([$mainSec], 'es')[0];
+check('section translation: title translated, empty text uses the main text', $esSec['title'] === 'El día' && $esSec['body'] === $mainSec['body']);
+check('section translation only for its language', localise_sections([$mainSec], 'de')[0]['title'] === $mainSec['title']);
+save_section_translation($secId, 'es', '', '', 'Test');
+same('clearing both removes the translation', [], section_languages($secId));
+
+section('Update emails in each language');
+$starters = starter_templates();
+same('five starter templates, named in the site language', 'Reminder to reply', $starters[0]['name']);
+same('starters come translated into every other language', array_values(array_diff(site_languages(), ['en'])), array_keys($starters[0]['translations']));
+same('a starter translation has the couple filled in', 'Sind Sie dabei? ' . COUPLE_NAMES, $starters[0]['translations']['de']['subject']);
+$seeded = notify_db()->query("SELECT * FROM email_templates WHERE name = 'Reminder to reply'")->fetch();
+check('seeded starters keep their translations', ($seeded ? template_translations($seeded)['es']['body'] ?? '' : '') !== '');
+$old = starter_templates()[1];
+$insertOld = notify_db()->prepare('INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)');
+$insertOld->execute([$old['name'], $old['subject'], str_replace("\n", "\r\n", $old['body'])]);
+$unchangedId = (int)notify_db()->lastInsertId();
+$insertOld->execute([$old['name'], $old['subject'], $old['body'] . ' Changed.']);
+$changedId = (int)notify_db()->lastInsertId();
+translate_starter_templates(notify_db());
+check('upgrading: an unchanged starter gets its translations', isset(template_translations(find_template($unchangedId))['ar']));
+same('upgrading: a changed one is left alone', [], template_translations(find_template($changedId)));
+notify_db()->exec("DELETE FROM email_templates WHERE id IN ($unchangedId, $changedId)");
+same('translations from a form are cleaned', ['es' => ['subject' => 'Hola a todos', 'body' => "Hola {name}\nAdiós"]], clean_translations([
+    'es' => ['subject' => "Hola\na todos", 'body' => "Hola {name}\r\nAdiós "],
+    'en' => ['subject' => 'Main language', 'body' => 'is not a translation'],
+    'xx' => ['subject' => 'Unknown', 'body' => 'language'],
+    'de' => ['subject' => '', 'body' => ''],
+    'fr' => 'not an array',
+    'ar' => ['subject' => ['nested'], 'body' => ['arrays']],
+]));
+$tr = ['es' => ['subject' => 'Asunto', 'body' => ''], 'de' => ['subject' => '', 'body' => 'Text']];
+same('update: a translated subject, the main text where not translated', ['Asunto', 'Main text'], update_version('es', 'Subject', 'Main text', $tr));
+same('update: the main subject where not translated', ['Subject', 'Text'], update_version('de', 'Subject', 'Main text', $tr));
+same('update: no translation, the main version', ['Subject', 'Main text'], update_version('fr', 'Subject', 'Main text', $tr));
+[, $frText, $frHtml] = in_language('fr', fn() => render_update(['name' => 'Léa', 'code' => 'K7MPX4QR'], 'Sujet', "Bonjour {name}\n\n{link}"));
+check('update wording around the message in the guest\'s language', strpos($frHtml, 'Des nouvelles de ' . h(COUPLE_NAMES)) !== false
+    && strpos($frText, 'Ne plus recevoir ces nouvelles: https://example.com/unsubscribe.php') !== false && strpos($frHtml, 'lang="fr"') !== false);
+$arUpdate = in_language('ar', fn() => render_update(['name' => 'Sara', 'code' => 'K7MPX4QR'], 'S', 'B'))[2];
+check('an Arabic update is right-to-left', strpos($arUpdate, 'dir="rtl"') !== false && strpos($arUpdate, 'إيقاف هذه الأخبار') !== false);
+
 section('Tagline');
 save_setting('tagline', '');
 same('default tagline', "You're invited", tagline());
