@@ -108,7 +108,8 @@ function reply_timeline(array $guests): array
             $sends[$day]['invitations'] = ($sends[$day]['invitations'] ?? 0) + 1;
         }
     }
-    foreach (db()->query("SELECT sent_at, subject, sent FROM notifications WHERE sent > 0")->fetchAll() as $n) {
+    // notify_db(), not db(): on a new site it creates the table first.
+    foreach (notify_db()->query("SELECT sent_at, subject, sent FROM notifications WHERE sent > 0")->fetchAll() as $n) {
         $sends[substr($n['sent_at'], 0, 10)]['update: ' . $n['subject']] = (int)$n['sent'];
     }
     $days = array_keys($replies + $sends);

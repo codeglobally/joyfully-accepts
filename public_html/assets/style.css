@@ -139,7 +139,7 @@ legend { margin-bottom: 12px; }
   cursor: pointer;
 }
 .choice:has(input:checked) { border-color: var(--accent); background: var(--bg); }
-.choice input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+.choice input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); margin: 0; }   /* never squeezed by a long label */
 
 /* --- Guest page --- */
 

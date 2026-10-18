@@ -10,6 +10,8 @@ What changed in each version. The site uses [semantic versioning](https://semver
 - **Your wording in each language:** guest-page sections, the invitation email and tagline, and update emails (including templates) each have a version per language, falling back to your main one. Built-in text you haven't changed comes translated, on existing sites too.
 - **Admin:** each admin chooses their language on Your account (their browser's until then), and gets emails such as feedback notices in it. The Guests tab shows each guest's language, which can be set when editing an invitation or with a *Language* column in a CSV upload.
 - **Names** in other languages split into people properly ("y", "und", "et", "و", "和", "、"); Chinese names are left whole. CSV files saved by older Excel in Chinese encodings (GB18030, Big5) are read correctly.
+- Fix: the Insights tab no longer fails on a brand-new site before any update has been sent.
+- Fix: radio buttons keep their size next to long answers.
 - New settings: `SITE_LANGUAGE`, `LANGUAGES` and `ARABIC_DIGITS` (see `config.example.php`). Nothing to change to upgrade: without them the site's language is English, with all eight offered to guests.
 
 ## 2.5.0
