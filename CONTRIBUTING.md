@@ -7,6 +7,7 @@ Thank you for helping. Whether it's a bug report, an idea, a suggested fix or a 
 - **Tell us how it went.** [Share your feedback](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feedback.yml). Hearing how the site was really used is the most useful thing of all.
 - **Report a bug** with the [bug form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=bug_report.yml).
 - **Report an accessibility barrier** with the [accessibility form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=accessibility.yml). These are given priority.
+- **Improve a translation** with the [translation form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=translation.yml), or **ask for a new language** with the [language form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=new_language.yml). See [Translations](#translations).
 - **Suggest an idea** with the [idea form](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml).
 - **Suggest a fix.** Pull requests are limited to collaborators (see below), but fixes are very welcome in an issue.
 - **Make it your own.** Fork it for your own wedding. That's what the MIT licence is for.
@@ -24,9 +25,21 @@ These are what keep it easy to install and look after, so changes are judged aga
 - **Private by default.** No third-party scripts, fonts, analytics or trackers. Guest data stays in the couple's own database.
 - **Accessible.** Everything a guest or couple uses works by keyboard and meets WCAG 2.1 AA.
 - **Secure.** Output is escaped, SQL uses prepared statements, every form has a CSRF token, and nothing breaks the Content Security Policy (so no inline scripts or styles).
-- **Friendly words.** Text on the site is plain, warm British English, written for guests who aren't technical.
+- **Friendly words.** Text on the site is plain and warm, written for guests who aren't technical: British English first, then the same tone in every other language.
 
 A big new feature may not fit even if it's a good idea, so for anything large, please open an idea issue and we can talk it through.
+
+## Translations
+
+The site comes in English, Español, Deutsch, Français, العربية, 简体中文 and 繁體中文. Everything other than English began as a draft, so corrections from people who speak these languages are the most valuable help of all.
+
+- **What guests see** (pages and emails) is in `private/lang/xx.php`; **the admin area** is in `private/lang/admin/xx.php`. English (`en.php`) is the source for both.
+- Keep every key, and every `{placeholder}` exactly as it is: the site fills in `{name}`, `{count}` and the rest. Where a phrase shows `{name}`, `{link}` and `{code}` to the couple, those stay in English too.
+- Phrases with a `{count}` have plural forms: `one` and `other` in English, Spanish, German and French (French counts 0 as one); all six of `zero`, `one`, `two`, `few`, `many` and `other` in Arabic; just `other` in Chinese.
+- The tone: Spanish uses *tú*, German *Sie*, French *vous*, and Arabic the polite plural (أنتم), which works for one guest or several. Greetings in emails don't assume anyone's gender.
+- The tests check that every language has every phrase, with the same placeholders and plural forms, so `php tests/run.php` tells you if something's missing.
+
+**Adding a language** means a new pair of files, adding it to `LANGUAGE_NAMES` in `private/i18n.php` (and `RTL_LANGUAGES` if it's written right to left), its plural rules in `plural_form()` (in PHP; the admin's scripts use the browser's own), and its words for "and" and "family" in `private/lib.php` so guest names split properly. Please start with a [language request](https://github.com/codeglobally/joyfully-accepts/issues/new?template=new_language.yml) so we can plan it together.
 
 ## Running your own copy
 

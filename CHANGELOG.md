@@ -4,7 +4,12 @@ What changed in each version. The site uses [semantic versioning](https://semver
 
 ## 2.6.0
 
-- **Languages:** English, Español, Deutsch, Français, العربية (right-to-left), 简体中文 and 繁體中文. Each guest's language is taken from their browser on their first visit, can be changed from the footer, and is saved on their invitation. Dates are shown in each language. Everything other than English is a draft translation: corrections welcome.
+- **Languages:** English, Español, Deutsch, Français, العربية (right-to-left), 简体中文 and 繁體中文, for the guest pages, emails and the admin area. Everything other than English is a draft translation: corrections welcome, with new [translation](.github/ISSUE_TEMPLATE/translation.yml) and [new language](.github/ISSUE_TEMPLATE/new_language.yml) issue forms.
+- **Guests** get their browser's language on their first visit, can change it from the footer, and keep it: it's saved on their invitation and used for later emails. Dates, plurals and right-to-left layout follow the language.
+- **Your wording in each language:** guest-page sections, the invitation email and tagline, and update emails (including templates) each have a version per language, falling back to your main one. Built-in text you haven't changed comes translated, on existing sites too.
+- **Admin:** each admin chooses their language on Your account (their browser's until then), and gets emails such as feedback notices in it. The Guests tab shows each guest's language, which can be set when editing an invitation or with a *Language* column in a CSV upload.
+- **Names** in other languages split into people properly ("y", "und", "et", "و", "和", "、"); Chinese names are left whole. CSV files saved by older Excel in Chinese encodings (GB18030, Big5) are read correctly.
+- New settings: `SITE_LANGUAGE`, `LANGUAGES` and `ARABIC_DIGITS` (see `config.example.php`). Nothing to change to upgrade: without them the site's language is English, with all seven offered to guests.
 
 ## 2.5.0
 
