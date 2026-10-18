@@ -126,7 +126,7 @@ if (isset($_GET['passkey_options']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $options = null;
     if (!$origin) {
         http_response_code(400);
-        exit(json_encode(['error' => t('admin.passkey.only_on', ['url' => SITE_URL])]));
+        exit(json_encode(['error' => t('admin.passkey.only_on', ['url' => SITE_URL])], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS));
     } elseif ($purpose === 'login') {
         $options = passkey_get_options($origin, 'login');
     } elseif ($purpose === 'confirm' && $pending) {
@@ -138,7 +138,7 @@ if (isset($_GET['passkey_options']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($options === null) {
         http_response_code(403);
-        exit(json_encode(['error' => t('admin.passkey.sign_in_again')]));
+        exit(json_encode(['error' => t('admin.passkey.sign_in_again')], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_HEX_APOS));
     }
     exit(json_encode($options));
 }
@@ -815,7 +815,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $back = 'people';
         if (!is_owner()) {
             http_response_code(403);
-            exit(t('admin.people.owner_only'));
+            exit(th('admin.people.owner_only'));
         }
         $id = (int)input($_POST, 'id');
         $on = input($_POST, 'notify_feedback') === '1';
@@ -834,7 +834,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $back = 'people';
         if (!is_owner()) {
             http_response_code(403);
-            exit(t('admin.people.owner_only'));
+            exit(th('admin.people.owner_only'));
         }
         $emailIt = input($_POST, 'send_email') === '1';
         if ($action === 'user_add') {

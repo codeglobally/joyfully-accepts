@@ -2,6 +2,10 @@
 
 What changed in each version. The site uses [semantic versioning](https://semver.org): MAJOR when site owners must do something to upgrade, MINOR for anything new, PATCH for fixes and small tweaks. Every change bumps the version.
 
+## 2.7.4
+
+- Plain-text error messages are escaped too, and error replies in JSON escape characters that mean something in HTML.
+
 ## 2.7.3
 
 - Security hardening: a language code from a cookie, form or link is swapped for the site's own copy before it's used, the return path after choosing a language is checked in one place, and one more admin value is escaped. (Found by the Psalm taint analysis; none of it was exploitable, as codes were already checked against the list.)

@@ -197,6 +197,9 @@ function phrases(string $code): array
 // The phrase for $key in the current language (English if it's missing),
 // with {placeholders} filled in from $vars. Returns plain text: escape it
 // with h() like anything else. A 'count' in $vars picks the plural form.
+// (Psalm checks each call on its own: a phrase is only as untrusted as the
+// $vars put into it.)
+/** @psalm-taint-specialize */
 function t(string $key, array $vars = []): string
 {
     $code = current_language();

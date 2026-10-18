@@ -7,7 +7,7 @@ $guest = require_guest();
 set_language(guest_language($guest));
 if (!wedding_day()) {
     http_response_code(404);
-    exit(t('cal.no_date'));
+    exit(th('cal.no_date'));
 }
 header('Content-Type: text/calendar; charset=utf-8');
 header('Content-Disposition: attachment; filename="wedding.ics"');
