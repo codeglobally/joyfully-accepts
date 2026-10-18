@@ -2,6 +2,10 @@
 
 What changed in each version. The site uses [semantic versioning](https://semver.org): MAJOR when site owners must do something to upgrade, MINOR for anything new, PATCH for fixes and small tweaks. Every change bumps the version.
 
+## 2.6.1
+
+- `deploy.sh`: the check that the new version is live now finds it in the 2.6 footer.
+
 ## 2.6.0
 
 - **Languages:** English, Español, Deutsch, Français, العربية (right-to-left), 简体中文, 繁體中文, Te Reo Māori and Cymraeg, for the guest pages, emails and the admin area. Everything other than English is a draft translation: corrections welcome, with new [translation](.github/ISSUE_TEMPLATE/translation.yml) and [new language](.github/ISSUE_TEMPLATE/new_language.yml) issue forms.

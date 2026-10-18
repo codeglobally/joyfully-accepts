@@ -184,7 +184,8 @@ fileop unlink "$HOME_DIR/$ZIP_NAME" "" >/dev/null || echo "  (couldn't delete it
 step "Checking $SITE shows v$VERSION"
 for attempt in 1 2 3 4 5; do
     page="$(curl -sS -m 20 "$SITE/" || true)"
-    if grep -q "&middot; v$VERSION<" <<<"$page"; then
+    # The version sits in the footer, as "v1.2.3</bdi>" (or "v1.2.3<" before 2.6).
+    if grep -qE ">v${VERSION//./\\.}<" <<<"$page"; then
         echo "✓ Deployed version $VERSION. Backup: ~/wedding-backups/backup-$STAMP.zip"
         exit 0
     fi
