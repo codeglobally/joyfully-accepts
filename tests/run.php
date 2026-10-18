@@ -400,6 +400,10 @@ check('language menu offers every language, each in its own name', (function () 
     return substr_count($menu, 'name="lang"') === count(site_languages()) && strpos($menu, 'lang="ar" dir="rtl"') !== false
         && strpos($menu, '简体中文') !== false;
 })());
+same('language codes from a request become the site\'s own', ['es', null, null, null], array_map('known_language', ['es', 'ES', 'es ', "es\r\nX-Evil: 1"]));
+same('only offered languages pass', [null, 'cy'], [offered_language('xx'), offered_language('cy')]);
+same('going back after choosing a language stays on this site', ['/guest.php', '/', '/', '/', '/'],
+    array_map('back_path', ['/guest.php', '//evil.example/x', '/\\evil.example', 'https://evil.example', "/guest.php\r\nSet-Cookie: x=1"]));
 same('browser languages ranked, best first', ['de', 'fr', 'en'], ranked_languages('fr;q=0.8, de, en;q=0.5, xx', ['en', 'de', 'fr']));
 $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'cy, fr;q=0.8';
 $order = languages_for_visitor();

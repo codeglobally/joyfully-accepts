@@ -38,6 +38,26 @@ function site_language(): string
     return isset(LANGUAGE_NAMES[SITE_LANGUAGE]) ? SITE_LANGUAGE : 'en';
 }
 
+// The site's own copy of a language code, or null if $code isn't one. Codes
+// that arrive in a request go through this, so what's used afterwards (in
+// cookies, links and file names) comes from the site, never the visitor.
+function known_language(?string $code): ?string
+{
+    foreach (array_keys(LANGUAGE_NAMES) as $known) {
+        if ($known === $code) {
+            return $known;
+        }
+    }
+    return null;
+}
+
+// The same, for languages this site offers.
+function offered_language(?string $code): ?string
+{
+    $known = known_language($code);
+    return $known !== null && in_array($known, site_languages(), true) ? $known : null;
+}
+
 function valid_language(?string $code): bool
 {
     return $code !== null && in_array($code, site_languages(), true);
@@ -52,7 +72,7 @@ function current_language(): string
 
 function set_language(string $code): void
 {
-    $GLOBALS['current_language'] = isset(LANGUAGE_NAMES[$code]) ? $code : site_language();
+    $GLOBALS['current_language'] = known_language($code) ?? site_language();
 }
 
 // Runs $fn with another language switched on, then switches back.
@@ -310,8 +330,7 @@ const LANGUAGE_COOKIE = 'lang';
 
 function cookie_language(): ?string
 {
-    $code = (string)($_COOKIE[LANGUAGE_COOKIE] ?? '');
-    return valid_language($code) ? $code : null;
+    return offered_language(is_string($_COOKIE[LANGUAGE_COOKIE] ?? null) ? $_COOKIE[LANGUAGE_COOKIE] : null);
 }
 
 function remember_language_cookie(string $code): void
@@ -405,6 +424,15 @@ function language_menu(string $where = 'footer'): string
 
 const LANGUAGE_HINT_COOKIE = 'lang_hint';
 
+// Where to go back to after choosing a language: a path on this site only
+// (no "//other.site", no backslashes, nothing but plain path characters),
+// otherwise the home page.
+/** @psalm-taint-escape header */
+function back_path(string $back): string
+{
+    return preg_match('#^/(?![/\\\\])[A-Za-z0-9._/-]*$#', $back) ? $back : '/';
+}
+
 // The language to suggest switching to, or null: the one chosen in this
 // browser, or else the browser's favourite offered language, when the page
 // is in a different one the guest didn't pick themselves (set in admin, or
@@ -418,7 +446,7 @@ function language_hint(?array $guest = null): ?string
     if ($guest !== null && ($guest['language_set_by'] ?? '') === 'guest') {
         return null;   // they picked it themselves
     }
-    return ($_COOKIE[LANGUAGE_HINT_COOKIE] ?? '') === $browser ? null : $browser;
+    return known_language(is_string($_COOKIE[LANGUAGE_HINT_COOKIE] ?? null) ? $_COOKIE[LANGUAGE_HINT_COOKIE] : null) === $browser ? null : $browser;
 }
 
 // The one-line suggestion, written in the suggested language.

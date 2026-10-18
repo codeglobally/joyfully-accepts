@@ -501,7 +501,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $back = 'email';
         // Which language's version is being edited; From and Reply-to are
         // shared, so they're only saved from the main language's form.
-        $mailLang = valid_language(input($_POST, 'lang')) ? input($_POST, 'lang') : site_language();
+        $mailLang = offered_language(input($_POST, 'lang')) ?? site_language();
         if ($mailLang !== site_language()) {
             $backExtra = '&lang=' . urlencode($mailLang);
         } else {
@@ -560,7 +560,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $greetingStyle = in_array(input($_POST, 'greeting_style'), ['full', 'first'], true) ? input($_POST, 'greeting_style') : null;
         preg_match('/^.{0,120}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'greeting'))), $m);   // one line, 120 characters
         $greeting = trim($m[0] ?? '');
-        $language = input($_POST, 'language');
+        $language = offered_language(input($_POST, 'language')) ?? '';   // '' = not known
         $q = db()->prepare('SELECT * FROM guests WHERE id = ?');
         $q->execute([$id]);
         $g = $q->fetch();
@@ -576,7 +576,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $greeting !== '' ? $greeting : null, $greetingStyle, $id]);
             // A language picked here counts as set by admin; leaving it alone keeps how it was set.
             if (isset($_POST['language']) && ($language !== (string)($g['language'] ?? ''))) {
-                $language = valid_language($language) ? $language : null;
+                $language = $language !== '' ? $language : null;
                 db()->prepare('UPDATE guests SET language = ?, language_set_by = ? WHERE id = ?')
                     ->execute([$language, $language ? 'admin' : null, $id]);
             }
@@ -613,7 +613,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $translationsJson = $draft['translations'] ? json_encode($draft['translations'], JSON_UNESCAPED_UNICODE) : null;
 
         if ($action === 'notify_preview') {
-            $lang = valid_language(input($_GET, 'preview_lang')) ? input($_GET, 'preview_lang') : site_language();
+            $lang = offered_language(input($_GET, 'preview_lang')) ?? site_language();
             header('Location: /admin.php?preview_update=1&lang=' . urlencode($lang));   // opens in its own tab
             exit;
         } elseif ($action === 'template_delete') {
@@ -693,8 +693,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $body = trim(str_replace("\r\n", "\n", input($_POST, 'body')));
         $visible = input($_POST, 'visible') === '1' ? 1 : 0;
         // Another language's version of an existing section.
-        $lang = input($_POST, 'lang');
-        $translating = $id && find_section($id) && valid_language($lang) && $lang !== site_language();
+        $lang = offered_language(input($_POST, 'lang')) ?? '';
+        $translating = $id && find_section($id) && $lang !== '' && $lang !== site_language();
         if ($translating) {
             if ($action === 'section_preview') {
                 $_SESSION['section_draft'] = compact('id', 'title', 'body', 'visible', 'lang');
@@ -921,7 +921,7 @@ function preview_bar(string $subject): string
 }
 
 if (isset($_GET['preview'])) {
-    $previewLang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
+    $previewLang = offered_language(input($_GET, 'lang')) ?? site_language();
     $settings = mail_settings($previewLang);
     $sample = ['name' => 'Sarah & Tom Jones', 'code' => 'K7MPX4QR'];
     [$subject, , $html] = in_language($previewLang, fn() => render_invite($sample, $settings, email_photo_url()));
@@ -936,7 +936,7 @@ if (isset($_GET['preview'])) {
 
 if (isset($_GET['preview_update'])) {
     $draft = $_SESSION['update_draft'] ?? ['subject' => '', 'body' => ''];
-    $lang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
+    $lang = offered_language(input($_GET, 'lang')) ?? site_language();
     [$subject, $body] = update_version($lang, $draft['subject'], $draft['body'], $draft['translations'] ?? []);
     $sample = ['name' => 'Sarah & Tom Jones', 'code' => 'K7MPX4QR'];
     [$subject, , $html] = in_language($lang, fn() => render_update($sample, $subject, $body, email_photo_url()));
@@ -1401,7 +1401,7 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 <?php elseif ($tab === 'email'): ?>
 
   <?php
-  $mailLang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
+  $mailLang = offered_language(input($_GET, 'lang')) ?? site_language();
   $isMainLang = $mailLang === site_language();
   $here = mail_settings($mailLang);                       // what guests reading this language get now
   $ownTagline = $isMainLang ? own_wording('tagline', $mailLang) : trim(setting('tagline.' . $mailLang));
@@ -1491,7 +1491,7 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
       <label><?= th('admin.upd.send_to') ?>
         <select name="audience" class="party-size">
           <?php foreach (audiences() as $key => $label): $n = count(audience_guests($key)); ?>
-            <option value="<?= $key ?>" <?= $draft['audience'] === $key ? 'selected' : '' ?>><?= h($label) ?> (<?= $n ?>)</option>
+            <option value="<?= h($key) ?>" <?= $draft['audience'] === $key ? 'selected' : '' ?>><?= h($label) ?> (<?= $n ?>)</option>
           <?php endforeach; ?>
         </select>
       </label>
@@ -1638,8 +1638,8 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
             $editing = $s;
         }
         // Editing another language's version: start from the saved translation.
-        $editLang = input($_GET, 'lang');
-        if ($editing && $editing['id'] && valid_language($editLang) && $editLang !== site_language()) {
+        $editLang = offered_language(input($_GET, 'lang')) ?? '';
+        if ($editing && $editing['id'] && $editLang !== '' && $editLang !== site_language()) {
             $main = $editing;
             $tr = section_translation((int)$editing['id'], $editLang);
             $editing = ['id' => $editing['id'], 'title' => $tr['title'] ?? '', 'body' => $tr['body'] ?? '', 'visible' => $editing['visible']];

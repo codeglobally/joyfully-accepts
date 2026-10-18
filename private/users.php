@@ -320,7 +320,7 @@ function admin_language(int $id): string
 
 function save_admin_language(int $id, string $code): void
 {
-    $code = isset(LANGUAGE_NAMES[$code]) ? $code : '';   // any language, even one guests aren't offered
+    $code = known_language($code) ?? '';   // any language, even one guests aren't offered
     if ($id === 0) {
         save_setting('owner_language', $code);
         return;

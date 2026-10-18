@@ -9,14 +9,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 check_csrf();
-$code = input($_POST, 'lang');
-$dismiss = input($_POST, 'dismiss');
-if (valid_language($dismiss)) {
+$code = offered_language(input($_POST, 'lang'));
+$dismiss = offered_language(input($_POST, 'dismiss'));
+if ($dismiss !== null) {
     // "No thanks" to switching: don't suggest this language again here.
     setcookie(LANGUAGE_HINT_COOKIE, $dismiss, ['expires' => time() + 365 * 86400, 'path' => '/',
         'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https',
         'httponly' => true, 'samesite' => 'Lax']);
-} elseif (valid_language($code)) {
+} elseif ($code !== null) {
     remember_language_cookie($code);
     $guest = current_guest();
     if ($guest) {
@@ -24,5 +24,4 @@ if (valid_language($dismiss)) {
     }
 }
 // Back to the page they were on: only a path on this site.
-$back = input($_POST, 'back');
-header('Location: ' . (preg_match('#^/(?![/\\\\])[A-Za-z0-9._/-]*$#', $back) ? $back : '/'));
+header('Location: ' . back_path(input($_POST, 'back')));
