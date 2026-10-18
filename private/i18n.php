@@ -123,6 +123,25 @@ function language_for_tag(string $tag): ?string
     return null;
 }
 
+// A language typed in a spreadsheet: a code ("es", "zh-TW"), its own name
+// ("Español") or its English name ("Spanish"). Null if it isn't one we have.
+function language_from_text(string $text): ?string
+{
+    $text = trim($text);
+    $folded = function_exists('mb_strtolower') ? mb_strtolower($text) : strtolower($text);
+    $english = ['english' => 'en', 'spanish' => 'es', 'german' => 'de', 'french' => 'fr', 'arabic' => 'ar',
+        'chinese' => 'zh-Hans', 'simplified chinese' => 'zh-Hans', 'traditional chinese' => 'zh-Hant'];
+    foreach (LANGUAGE_NAMES as $code => $name) {
+        if ($folded === (function_exists('mb_strtolower') ? mb_strtolower($name) : strtolower($name))) {
+            return $code;
+        }
+    }
+    if (isset($english[$folded])) {
+        return $english[$folded];
+    }
+    return preg_match('/^[a-z]{2,3}([-_][a-z0-9]{2,8})*$/i', $text) ? language_for_tag(str_replace('_', '-', $text)) : null;
+}
+
 function browser_language(): ?string
 {
     return negotiate_language((string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''), site_languages());
@@ -134,8 +153,13 @@ function phrases(string $code): array
 {
     static $loaded = [];
     if (!isset($loaded[$code])) {
-        $file = __DIR__ . '/lang/' . $code . '.php';
-        $loaded[$code] = isset(LANGUAGE_NAMES[$code]) && is_file($file) ? (array)require $file : [];
+        // Guest phrases in lang/xx.php, the admin area's in lang/admin/xx.php.
+        $loaded[$code] = [];
+        foreach ([__DIR__ . "/lang/$code.php", __DIR__ . "/lang/admin/$code.php"] as $file) {
+            if (isset(LANGUAGE_NAMES[$code]) && is_file($file)) {
+                $loaded[$code] += (array)require $file;
+            }
+        }
     }
     return $loaded[$code];
 }
@@ -215,6 +239,35 @@ function format_date(DateTimeInterface $date): string
         'month' => $months[(int)$date->format('n') - 1] ?? $date->format('F'),
         'year' => number_text($date->format('Y')),
     ]);
+}
+
+// A short date for admin tables, such as "9 Sep" or "9 Sep 2028, 14:05".
+// $style: 'day', 'year', 'time' (day and time), 'full' (with year and time)
+// or 'weekday'.
+function admin_date(int $time, string $style = 'day'): string
+{
+    $months = t_list('date.months_short');
+    $vars = ['day' => number_text(date('j', $time)), 'month' => $months[(int)date('n', $time) - 1] ?? date('M', $time),
+        'year' => number_text(date('Y', $time))];
+    $date = t(in_array($style, ['year', 'full'], true) ? 'date.day_month_year' : 'date.day_month', $vars);
+    if ($style === 'weekday') {
+        return t('date.with_weekday', ['weekday' => t_list('date.weekdays_short')[(int)date('w', $time)] ?? '', 'date' => $date]);
+    }
+    return in_array($style, ['time', 'full'], true) ? t('date.with_time', ['date' => $date, 'time' => date('H:i', $time)]) : $date;
+}
+
+// "←" for "Back to …" links, pointing the other way in right-to-left text.
+function back_arrow(): string
+{
+    return is_rtl() ? '&rarr;' : '&larr;';
+}
+
+// A list of names joined in the current language's way ("a, b" / "a、b").
+function join_names(array $names, int $max = 0): string
+{
+    $more = $max && count($names) > $max ? count($names) - $max : 0;
+    $list = implode(t('admin.comma'), $more ? array_slice($names, 0, $max) : $names);
+    return $more ? t('admin.and_more', ['list' => $list, 'count' => $more]) : $list;
 }
 
 // A list-valued phrase (weekday and month names), falling back to English.
@@ -345,7 +398,9 @@ function js_phrases(array $keys): string
 {
     $out = [];
     foreach ($keys as $key) {
-        $out[$key] = t($key);
+        // Plural phrases go as their forms; the script picks one with Intl.PluralRules.
+        $phrase = phrases(current_language())[$key] ?? phrases('en')[$key] ?? $key;
+        $out[$key] = is_array($phrase) && isset($phrase['other']) ? $phrase : t($key);
     }
     return '<div id="phrases" hidden data-phrases="' . h((string)json_encode($out, JSON_UNESCAPED_UNICODE)) . '"></div>';
 }

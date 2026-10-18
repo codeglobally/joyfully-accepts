@@ -298,8 +298,9 @@ function save_admin_contact(int $id, string $email, bool $notify): void
         ->execute([$email !== '' ? $email : null, $notify ? 1 : 0, $id]);
 }
 
-// An admin's language (0 = the owner): what they chose, or the site's.
-function admin_language(int $id): string
+// The language an admin chose on Your account (0 = the owner), or null.
+// Admin pages fall back to their browser's language, emails to the site's.
+function admin_language_choice(int $id): ?string
 {
     if ($id === 0) {
         $code = setting('owner_language');
@@ -308,12 +309,18 @@ function admin_language(int $id): string
         $q->execute([$id]);
         $code = $q->fetchColumn();
     }
-    return valid_language(is_string($code) ? $code : null) ? $code : site_language();
+    return is_string($code) && isset(LANGUAGE_NAMES[$code]) ? $code : null;
+}
+
+// An admin's language for emails: their choice, or the site's.
+function admin_language(int $id): string
+{
+    return admin_language_choice($id) ?? site_language();
 }
 
 function save_admin_language(int $id, string $code): void
 {
-    $code = valid_language($code) ? $code : '';
+    $code = isset(LANGUAGE_NAMES[$code]) ? $code : '';   // any language, even one guests aren't offered
     if ($id === 0) {
         save_setting('owner_language', $code);
         return;

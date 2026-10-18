@@ -386,6 +386,7 @@ $pluralForms = ['en' => ['one', 'other'], 'es' => ['one', 'other'], 'de' => ['on
 foreach (array_keys(LANGUAGE_NAMES) as $code) {
     $file = __DIR__ . '/../private/lang/' . $code . '.php';
     check("$code: phrase file exists", is_file($file));
+    check("$code: admin phrase file exists", is_file(__DIR__ . '/../private/lang/admin/' . $code . '.php'));
     $these = phrases($code);
     $missing = array_diff(array_keys($english), array_keys($these));
     $extra = array_diff(array_keys($these), array_keys($english));
@@ -422,6 +423,30 @@ same('Chinese date', '2028年9月9日 星期六', in_language('zh-Hans', fn() =>
 same('wedding date in another language is formatted', 'sábado, 9 de septiembre de 2028', in_language('es', 'wedding_date_text'));
 same('dietary options shown translated', 'Vegetariano', in_language('es', fn() => diet_label('Vegetarian')));
 same('typed dietary needs shown as typed', 'Sin cebolla', in_language('es', fn() => diet_label('Sin cebolla')));
+
+section('Admin in each language');
+$t9 = mktime(14, 5, 0, 9, 9, 2028);
+same('admin date', '9 Sep', in_language('en', fn() => admin_date($t9)));
+same('admin date with year and time, German', '9. Sept. 2028, 14:05', in_language('de', fn() => admin_date($t9, 'full')));
+same('admin date, French time', '9 sept. à 14:05', in_language('fr', fn() => admin_date($t9, 'time')));
+same('admin date, Chinese with weekday', '9月9日 周六', in_language('zh-Hans', fn() => admin_date($t9, 'weekday')));
+same('names joined, Chinese', '甲、乙', in_language('zh-Hans', fn() => join_names(['甲', '乙'])));
+same('long lists shortened', 'a, b and 2 more', in_language('en', fn() => join_names(['a', 'b', 'c', 'd'], 2)));
+same('back arrow points the reading way', ['&larr;', '&rarr;'], [in_language('en', 'back_arrow'), in_language('ar', 'back_arrow')]);
+same('language from a spreadsheet', ['es', 'de', 'zh-Hant', 'ar', 'zh-Hans', null],
+    array_map('language_from_text', ['es', 'Deutsch', 'zh_TW', 'arabic', '简体中文', 'Klingon']));
+same('CSV with a Language column', [['Ana', 'ana@example.com', 'es'], ['Bob', '', null]],
+    parse_guest_csv("Name,Email,Language\nAna,ana@example.com,Español\nBob,,\n"));
+same('Arabic plural for 7 days in admin', 'منذ 7 أيام', in_language('ar', fn() => t('admin.ago.days', ['count' => 7])));
+$jsPhrases = in_language('de', fn() => js_phrases(['admin.bulk.js_selected', 'admin.copied']));
+check('script phrases: plurals sent as forms, others as text', strpos($jsPhrases, '&quot;one&quot;') !== false && strpos($jsPhrases, 'Kopiert') !== false);
+same('audiences in the admin language', 'Noch unsicher', in_language('de', fn() => audiences()['maybe']));
+same('new sections start in the site language', 'Where to stay', in_language('fr', fn() => section_templates()['hotels']['title']));
+same('...with labels in the admin language', 'Où dormir', in_language('fr', fn() => section_templates()['hotels']['label']));
+save_admin_language(0, 'fr');
+same('admin language: chosen', ['fr', 'fr'], [admin_language_choice(0), admin_language(0)]);
+save_admin_language(0, 'xx');
+same('admin language: none chosen, emails in the site language', [null, 'en'], [admin_language_choice(0), admin_language(0)]);
 
 section('Invitation codes');
 $code = generate_code();
@@ -714,7 +739,7 @@ foreach ($argv as $arg) {
     $resetPage = $fresh($resetPath);
     $fresh($resetPath, ['csrf' => $csrf($resetPage), 'password' => 'lee-new-long-password', 'confirm' => 'lee-new-long-password']);
     $after = $fresh('/admin.php?tab=guests');
-    check('a password reset still asks for their passkey', strpos($after, 'confirm it\'s you with your passkey') !== false && strpos($after, 'Invitations (') === false);
+    check('a password reset still asks for their passkey', strpos($after, 'with your passkey.') !== false && strpos($after, 'Invitations (') === false);
     @unlink($jar4);
     // The owner can switch anyone's feedback emails on the People tab; no one else can.
     $kimId = (int)users_db()->query("SELECT id FROM users WHERE username = 'kim'")->fetchColumn();
@@ -786,7 +811,7 @@ foreach ($argv as $arg) {
     $upload();
     $list = $get('/admin.php?tab=guests')['body'];
     check('CSV upload adds invitations', strpos($list, 'Added 2 invitations.') !== false && strpos($list, 'Uncle Ken') !== false);
-    check('both addresses shown for a couple', (bool)preg_match('#<span class="email-address">ali@example\.com</span>\s*<span class="email-address">jo@example\.com</span>#', $list));
+    check('both addresses shown for a couple', (bool)preg_match('#<span class="email-address" dir="ltr">ali@example\.com</span>\s*<span class="email-address" dir="ltr">jo@example\.com</span>#', $list));
     $upload();
     check('uploading the same file again skips them', strpos($get('/admin.php?tab=guests')['body'], 'Skipped 2 already on the list') !== false);
     $forgedUpload = $get('/admin.php', null, [CURLOPT_POSTFIELDS => ['action' => 'upload_csv', 'csv' => new CURLFile($csvFile, 'text/csv', 'guests.csv')]]);
@@ -813,10 +838,22 @@ foreach ($argv as $arg) {
     $log = (string)@file_get_contents($mailLog);
     check('ticked invitations sent, each address once', substr_count($log, '==== ') === 3 && strpos($log, '<ken@example.com>') !== false);
     check('send message counts resends and no-email guests',
-        strpos($get('/admin.php?tab=guests')['body'], 'Sent 2 invitations (1 of them again). No email address for: Gran No-Email.') !== false);
+        strpos($get('/admin.php?tab=guests')['body'], 'Sent 2 invitations. 1 of them had been sent before. No email address for: Gran No-Email.') !== false);
     $form = $get('/admin.php?tab=guests');
     $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'send_selected']);
     check('nothing ticked, nothing sent', strpos($get('/admin.php?tab=guests')['body'], 'Tick the invitations you want to send first.') !== false);
+    $acct = $get('/admin.php?tab=account');
+    $get('/admin.php', ['csrf' => $csrf($acct['body']), 'action' => 'account_language', 'language' => 'ar']);
+    $arAdmin = $get('/admin.php?tab=guests')['body'];
+    check('admin in Arabic once chosen: right-to-left, Arabic tabs and flash', strpos($arAdmin, '<html lang="ar" dir="rtl">') !== false
+        && strpos($arAdmin, '>الضيوف</a>') !== false && strpos($arAdmin, 'Invitations (') === false);
+    check('admin script phrases come in Arabic', strpos($arAdmin, 'id="phrases"') !== false && strpos($arAdmin, 'تم النسخ') !== false);
+    $get('/admin.php', ['csrf' => $csrf($arAdmin), 'action' => 'account_language', 'language' => '']);
+    check('back to the browser\'s language', strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') !== false);
+    $deLogin = curl_init($base . '/admin.php');
+    curl_setopt_array($deLogin, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Accept-Language: de-DE,de;q=0.9']]);
+    $deBody = (string)curl_exec($deLogin);
+    check('sign-in page follows the browser\'s language', strpos($deBody, 'Benutzername') !== false && strpos($deBody, 'Passwort vergessen?') !== false);
     @unlink($mailLog);
 
     // Tick several invitations and delete them together.
@@ -869,7 +906,7 @@ foreach ($argv as $arg) {
     $login = $get('/admin.php');
     $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
     $step = $get('/admin.php?tab=guests')['body'];
-    check('with a passkey, the password alone isn\'t enough', strpos($step, 'confirm it\'s you with your passkey') !== false && strpos($step, 'Invitations (') === false);
+    check('with a passkey, the password alone isn\'t enough', strpos($step, 'with your passkey.') !== false && strpos($step, 'Invitations (') === false);
     [$o, $token, $status] = $options('register', '/admin.php');
     check('half signed in can\'t add a passkey', $status === 403);
     [$o, $token] = $options('confirm', '/admin.php');

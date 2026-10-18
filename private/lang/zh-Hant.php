@@ -161,4 +161,12 @@ return [
     'admin_mail.username' => "您的使用者名稱是 {username}。",
     'admin_mail.expires' => ['other' => "此連結只能使用一次，{count}天後失效。"],
     'admin_mail.ignore' => "如果這不是您本人的操作，請忽略此郵件。",
+
+    // Short dates in admin tables.
+    'date.months_short' => ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+    'date.weekdays_short' => ['週日', '週一', '週二', '週三', '週四', '週五', '週六'],
+    'date.day_month' => '{month}{day}日',
+    'date.day_month_year' => '{year}年{month}{day}日',
+    'date.with_time' => '{date} {time}',
+    'date.with_weekday' => '{date} {weekday}',
 ];

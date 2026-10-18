@@ -11,6 +11,7 @@ require APP_DIR . '/passkeys.php';
 
 $error = '';
 $message = '';
+set_language(visitor_language());   // until we know who's signed in
 
 // --- Setup link: a new person chooses their password -----------------
 
@@ -21,9 +22,9 @@ if (isset($_GET['setup'])) {
         check_csrf();
         $password = input($_POST, 'password');
         if (strlen($password) < MIN_PASSWORD_LENGTH) {
-            $error = 'Please use at least ' . MIN_PASSWORD_LENGTH . ' characters.';
+            $error = t('admin.login.min_length', ['count' => MIN_PASSWORD_LENGTH]);
         } elseif ($password !== input($_POST, 'confirm')) {
-            $error = "The two passwords don't match.";
+            $error = t('admin.login.mismatch');
         } else {
             set_password((int)$user['id'], $password);
             $who = ['id' => (int)$user['id'], 'name' => $user['name'], 'owner' => false];
@@ -35,30 +36,32 @@ if (isset($_GET['setup'])) {
                 exit;
             }
             sign_in($who);
-            $_SESSION['flash'] = 'Welcome, ' . $user['name'] . '. Sign in with the username "' . $user['username'] . '" from now on.';
+            $_SESSION['flash'] = in_language(admin_language_choice((int)$user['id']) ?? current_language(),
+                fn() => t('admin.login.welcome', ['name' => $user['name'], 'username' => $user['username']]));
             header('Location: /admin.php');
             exit;
         }
     }
-    page_header('Admin', 'centered admin');
+    page_header(t('admin.title'), 'centered admin');
     ?>
     <main class="entry">
-      <h1>Admin</h1>
+      <h1><?= th('admin.title') ?></h1>
       <?php if (!$user): ?>
-        <p class="code-box">This setup link has expired or has already been used. Ask for a new one.</p>
+        <p class="code-box"><?= th('admin.setup.expired') ?></p>
       <?php else: ?>
         <form method="post" class="code-box">
           <?= csrf_field() ?>
-          <p>Hi <?= h($user['name']) ?>. Choose a password for signing in as <strong><?= h($user['username']) ?></strong>.</p>
-          <label for="password">New password (at least <?= MIN_PASSWORD_LENGTH ?> characters)</label>
+          <p><?= t_html('admin.setup.choose', ['username' => '<strong>' . h($user['username']) . '</strong>'], ['name' => $user['name']]) ?></p>
+          <label for="password"><?= th('admin.setup.new_password', ['count' => MIN_PASSWORD_LENGTH]) ?></label>
           <input id="password" name="password" type="password" autocomplete="new-password" required autofocus>
-          <label for="confirm">Type it again</label>
+          <label for="confirm"><?= th('admin.setup.again') ?></label>
           <input id="confirm" name="confirm" type="password" autocomplete="new-password" required>
           <?php if ($error): ?><p class="error" role="alert"><?= h($error) ?></p><?php endif; ?>
-          <button type="submit">Save password</button>
+          <button type="submit"><?= th('admin.setup.save') ?></button>
         </form>
       <?php endif; ?>
-      <p class="site-footer"><a href="/admin.php">Sign in</a></p>
+      <p class="site-footer"><a href="/admin.php"><?= th('admin.login.sign_in') ?></a></p>
+      <?= language_menu() ?>
     </main>
     <?php
     page_footer();
@@ -76,7 +79,7 @@ if (isset($_GET['forgot'])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         check_csrf();
         if (too_many_attempts()) {
-            $error = 'Too many attempts. Please wait 15 minutes.';
+            $error = t('admin.login.too_many');
         } else {
             record_failed_attempt();
             $user = find_user_by_login(input($_POST, 'login'));
@@ -86,25 +89,25 @@ if (isset($_GET['forgot'])) {
             $sent = true;
         }
     }
-    page_header('Admin', 'centered admin');
+    page_header(t('admin.title'), 'centered admin');
     ?>
     <main class="entry">
-      <h1>Admin</h1>
+      <h1><?= th('admin.title') ?></h1>
       <?php if ($sent): ?>
-        <p class="code-box">If that account has an email address, a link to reset the password is on its way.
-          It works once and expires in <?= SETUP_LINK_DAYS ?> days. Check your spam folder if it doesn't arrive.</p>
+        <p class="code-box"><?= th('admin.forgot.sent', ['count' => SETUP_LINK_DAYS]) ?></p>
       <?php else: ?>
         <form method="post" class="code-box">
           <?= csrf_field() ?>
-          <p>Enter your username or email address and we'll email you a link to choose a new password.</p>
-          <label for="login">Username or email</label>
+          <p><?= th('admin.forgot.intro') ?></p>
+          <label for="login"><?= th('admin.forgot.login') ?></label>
           <input id="login" name="login" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
           <?php if ($error): ?><p class="error" role="alert"><?= h($error) ?></p><?php endif; ?>
-          <button type="submit">Email me a link</button>
-          <p class="hint">The owner's <code><?= OWNER_USERNAME ?></code> password is set in config.php and can't be reset by email.</p>
+          <button type="submit"><?= th('admin.forgot.button') ?></button>
+          <p class="hint"><?= t_html('admin.forgot.owner', ['username' => '<code>' . h(OWNER_USERNAME) . '</code>']) ?></p>
         </form>
       <?php endif; ?>
-      <p class="site-footer"><a href="/admin.php">&larr; Back to sign in</a></p>
+      <p class="site-footer"><a href="/admin.php"><?= back_arrow() ?> <?= th('admin.forgot.back') ?></a></p>
+      <?= language_menu() ?>
     </main>
     <?php
     page_footer();
@@ -123,7 +126,7 @@ if (isset($_GET['passkey_options']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $options = null;
     if (!$origin) {
         http_response_code(400);
-        exit(json_encode(['error' => 'Passkeys only work on ' . SITE_URL . '.']));
+        exit(json_encode(['error' => t('admin.passkey.only_on', ['url' => SITE_URL])]));
     } elseif ($purpose === 'login') {
         $options = passkey_get_options($origin, 'login');
     } elseif ($purpose === 'confirm' && $pending) {
@@ -135,7 +138,7 @@ if (isset($_GET['passkey_options']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($options === null) {
         http_response_code(403);
-        exit(json_encode(['error' => 'Please sign in again.']));
+        exit(json_encode(['error' => t('admin.passkey.sign_in_again')]));
     }
     exit(json_encode($options));
 }
@@ -161,9 +164,9 @@ if ($loginAction === 'passkey_login' || $loginAction === 'passkey_confirm') {
     $clientData = b64url_decode(input($_POST, 'client_data'));
     $authData = b64url_decode(input($_POST, 'authenticator_data'));
     $signature = b64url_decode(input($_POST, 'signature'));
-    $result = 'That passkey didn\'t work here. Please try again.';
+    $result = t('admin.passkey.failed');
     if (too_many_attempts()) {
-        $result = 'Too many attempts. Please wait 15 minutes.';
+        $result = t('admin.login.too_many');
     } elseif ($challenge && $origin && $stored && $clientData !== null && $authData !== null && $signature !== null
         && ($purpose === 'login' || ($pending && (int)$stored['user_id'] === (int)$pending['id']))) {
         $result = verify_passkey_assertion(['challenge' => $challenge['challenge'], 'origin' => $origin[1], 'rp_id' => $origin[0]],
@@ -179,7 +182,7 @@ if ($loginAction === 'passkey_login' || $loginAction === 'passkey_confirm') {
             header('Location: /admin.php');
             exit;
         }
-        $result = 'That passkey belongs to someone who can no longer sign in.';
+        $result = t('admin.passkey.removed_user');
     }
     if (!too_many_attempts()) {
         record_failed_attempt();
@@ -191,7 +194,7 @@ if (isset($_POST['login'])) {
     check_csrf();
     $username = input($_POST, 'username');
     if (too_many_attempts()) {
-        $error = 'Too many attempts. Please wait 15 minutes.';
+        $error = t('admin.login.too_many');
     } elseif ($user = check_login($username, input($_POST, 'password'))) {
         if (passkey_required((int)$user['id'])) {
             // Right password; now the passkey.
@@ -206,26 +209,28 @@ if (isset($_POST['login'])) {
     } else {
         record_failed_attempt();
         $error = normalise_username($username) === OWNER_USERNAME && ADMIN_PASSWORD === 'change-me-please'
-            ? 'Set ADMIN_PASSWORD in config.php first.'
-            : 'Wrong username or password.';
+            ? t('admin.login.set_password')
+            : t('admin.login.wrong');
     }
 }
 
 if (!is_admin() && ($pending = pending_admin())) {
-    page_header('Admin', 'centered admin');
+    page_header(t('admin.title'), 'centered admin');
     ?>
     <main class="entry">
-      <h1>Admin</h1>
+      <h1><?= th('admin.title') ?></h1>
       <form method="post" class="code-box passkey-step">
         <?= csrf_field() ?>
-        <p>Hi <?= h($pending['name']) ?>. Now confirm it's you with your passkey.</p>
-        <button type="button" data-passkey="confirm" hidden>Use my passkey</button>
-        <p class="error" data-passkey-unsupported hidden>This browser can't use passkeys. Try the browser or device where you added it.</p>
+        <p><?= th('admin.passkey.confirm_intro', ['name' => $pending['name']]) ?></p>
+        <button type="button" data-passkey="confirm" hidden><?= th('admin.passkey.use') ?></button>
+        <p class="error" data-passkey-unsupported hidden><?= th('admin.passkey.unsupported_confirm') ?></p>
         <p class="error" role="alert" data-passkey-message <?= $error ? '' : 'hidden' ?>><?= h($error) ?></p>
-        <button type="submit" class="link" name="action" value="cancel_sign_in">Sign in as someone else</button>
+        <button type="submit" class="link" name="action" value="cancel_sign_in"><?= th('admin.passkey.someone_else') ?></button>
       </form>
-      <p class="site-footer"><a href="/">&larr; Back to site</a></p>
+      <p class="site-footer"><a href="/"><?= back_arrow() ?> <?= th('admin.back_to_site') ?></a></p>
+      <?= language_menu() ?>
     </main>
+    <?= js_phrases(['admin.js.reload', 'admin.js.exists', 'admin.js.not_added', 'admin.js.cancelled', 'admin.js.wrong']) ?>
     <script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script>
     <?php
     page_footer();
@@ -233,24 +238,26 @@ if (!is_admin() && ($pending = pending_admin())) {
 }
 
 if (!is_admin()) {
-    page_header('Admin', 'centered admin');
+    page_header(t('admin.title'), 'centered admin');
     ?>
     <main class="entry">
-      <h1>Admin</h1>
+      <h1><?= th('admin.title') ?></h1>
       <form method="post" class="code-box">
         <?= csrf_field() ?>
-        <label for="username">Username</label>
+        <label for="username"><?= th('admin.login.username') ?></label>
         <input id="username" name="username" type="text" autocomplete="username webauthn" autocapitalize="none"
                spellcheck="false" required autofocus value="<?= h(input($_POST, 'username')) ?>">
-        <label for="password">Password</label>
+        <label for="password"><?= th('admin.login.password') ?></label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
         <p class="error" role="alert" data-passkey-message <?= $error ? '' : 'hidden' ?>><?= h($error) ?></p>
-        <button type="submit" name="login" value="1">Sign in</button>
-        <button type="button" class="secondary passkey-button" data-passkey="login" hidden>Sign in with a passkey</button>
-        <p class="forgot"><a href="/admin.php?forgot=1">Forgot password?</a></p>
+        <button type="submit" name="login" value="1"><?= th('admin.login.sign_in') ?></button>
+        <button type="button" class="secondary passkey-button" data-passkey="login" hidden><?= th('admin.login.with_passkey') ?></button>
+        <p class="forgot"><a href="/admin.php?forgot=1"><?= th('admin.login.forgot') ?></a></p>
       </form>
-      <p class="site-footer"><a href="/">&larr; Back to site</a></p>
+      <p class="site-footer"><a href="/"><?= back_arrow() ?> <?= th('admin.back_to_site') ?></a></p>
+      <?= language_menu() ?>
     </main>
+    <?= js_phrases(['admin.js.reload', 'admin.js.exists', 'admin.js.not_added', 'admin.js.cancelled', 'admin.js.wrong']) ?>
     <script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script>
     <?php
     page_footer();
@@ -267,13 +274,16 @@ if (!admin_session_valid()) {
     exit;
 }
 $me = current_admin();
+set_language(admin_language_choice((int)$me['id']) ?? visitor_language());
 
 $unreadFeedback = (int)db()->query('SELECT COUNT(*) FROM feedback WHERE read_at IS NULL')->fetchColumn();
-$tabs = ['guests' => 'Guests', 'insights' => 'Insights', 'email' => 'Invitation email', 'updates' => 'Updates', 'content' => 'Content',
-    'feedback' => 'Feedback' . ($unreadFeedback ? " ($unreadFeedback)" : '')];
-$tabs['account'] = 'Your sign-in';
+$tabs = [];
+foreach (['guests', 'insights', 'email', 'updates', 'content', 'feedback', 'account'] as $key) {
+    $tabs[$key] = t('admin.tab.' . $key);
+}
+$tabs['feedback'] .= $unreadFeedback ? ' (' . number_text($unreadFeedback) . ')' : '';
 if (is_owner()) {
-    $tabs['people'] = 'People';
+    $tabs['people'] = t('admin.tab.people');
 }
 $tab = input($_GET, 'tab');
 if (!isset($tabs[$tab])) {
@@ -285,14 +295,49 @@ if (!isset($tabs[$tab])) {
 function feedback_toggle(int $id, string $name, array $contact): string
 {
     if (!valid_email($contact['email'])) {
-        return '<span class="hint">No email address</span>';
+        return '<span class="hint">' . th('admin.people.no_email') . '</span>';
     }
-    $label = 'Email ' . ($id === 0 ? 'you' : $name) . ' when a guest sends a message';
+    $label = $id === 0 ? t('admin.people.toggle_you') : t('admin.people.toggle_other', ['name' => $name]);
     return '<form method="post" class="inline feedback-toggle" data-autosubmit>' . csrf_field()
         . '<input type="hidden" name="action" value="user_feedback"><input type="hidden" name="id" value="' . $id . '">'
         . '<label class="check"><input type="checkbox" name="notify_feedback" value="1"' . ($contact['notify'] ? ' checked' : '')
-        . ' aria-label="' . h($label) . '"> ' . ($contact['notify'] ? 'On' : 'Off') . '</label>'
-        . ' <button class="link small" data-autosubmit-button>Save</button></form>';
+        . ' aria-label="' . h($label) . '"> ' . th($contact['notify'] ? 'admin.on' : 'admin.off') . '</label>'
+        . ' <button class="link small" data-autosubmit-button>' . th('admin.save') . '</button></form>';
+}
+
+// "{name}, {link} and {code} are filled in…", with the placeholders as code.
+function placeholders_hint(): string
+{
+    return t_html('admin.email.placeholders', ['name' => '<code>{name}</code>', 'link' => '<code>{link}</code>', 'code' => '<code>{code}</code>']);
+}
+
+// The formatting help under the section editor, with examples in the admin's language.
+function markdown_hint(): string
+{
+    $code = fn(string $s) => '<code dir="ltr">' . h($s) . '</code>';
+    return t_html('admin.md.hint', [
+        'heading' => $code('## '), 'bullet' => $code('- '),
+        'bold' => $code('**' . t('admin.md.sample_bold') . '**'), 'italic' => $code('*' . t('admin.md.sample_italic') . '*'),
+        'link' => $code('[' . t('admin.md.sample_link') . '](https://example.com)'),
+        'size' => $code('[large]' . t('admin.md.sample_text') . '[/large]'), 'small' => $code('small'), 'xlarge' => $code('xlarge'),
+    ]);
+}
+
+// A dietary chart label: the requirement in the admin's language, or "Other".
+function segment_label(string $label): string
+{
+    return $label === 'Other' ? t('admin.diet.other') : diet_label($label);
+}
+
+// What went out on one day of the timeline: "Invitations (12), Update: Hotels (40)".
+function sends_text(array $sends): string
+{
+    $parts = [];
+    foreach ($sends as $what => $n) {
+        $label = $what === 'invitations' ? t('admin.funnel.invitations') : t('admin.ins.update_label', ['subject' => substr($what, 8)]);
+        $parts[] = $label . ' (' . number_text($n) . ')';
+    }
+    return join_names($parts);
 }
 
 // --- Actions --------------------------------------------------------
@@ -322,15 +367,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $file = $_FILES['csv'] ?? null;
             if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
-                $problem = 'Choose a CSV file to upload.';
+                $problem = t('admin.add.choose_file');
             } elseif ($file['size'] > 1024 * 1024) {
-                $problem = 'That file is over 1 MB. A guest list should be much smaller, so check it\'s the right file.';
+                $problem = t('admin.add.too_big');
             } else {
                 $rows = parse_guest_csv((string)file_get_contents((string)$file['tmp_name']));
                 if (count($rows) > 2000) {
-                    [$rows, $problem] = [[], 'That file has more than 2,000 rows, so nothing was added. Check it\'s the right file.'];
+                    [$rows, $problem] = [[], t('admin.add.too_many_rows')];
                 } elseif (!$rows) {
-                    $problem = 'No names found in that file. Put each invitation on its own row, with the name in the first column.';
+                    $problem = t('admin.add.no_names');
                 }
             }
         }
@@ -338,24 +383,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = $problem;
         } else {
             [$added, $bad, $skipped] = add_guests($rows, $action === 'upload_csv');
-            $message = "Added $added " . ($added === 1 ? 'invitation' : 'invitations') . '.';
+            $message = t('admin.add.added', ['count' => $added]);
             if ($skipped) {
-                $message .= ' Skipped ' . count($skipped) . ' already on the list: ' . implode(', ', array_slice($skipped, 0, 10))
-                    . (count($skipped) > 10 ? ' and ' . (count($skipped) - 10) . ' more' : '') . '.';
+                $message .= ' ' . t('admin.add.skipped', ['count' => count($skipped), 'names' => join_names($skipped, 10)]);
             }
             if ($bad) {
-                $message .= ' These have an email address that looks wrong, so it won\'t be used: ' . implode(', ', $bad) . '.';
+                $message .= ' ' . t('admin.add.bad_emails', ['names' => join_names($bad)]);
             }
         }
     } elseif ($action === 'greeting_style') {
         $style = input($_POST, 'style') === 'first' ? 'first' : 'full';
         save_setting('greeting_style', $style);
-        $message = $style === 'first'
-            ? 'Guests are now greeted by first names only, unless you\'ve set something different for them.'
-            : 'Guests are now greeted by their full names, unless you\'ve set something different for them.';
+        $message = t($style === 'first' ? 'admin.greet.saved_first' : 'admin.greet.saved_full');
     } elseif ($action === 'delete') {
         db()->prepare('DELETE FROM guests WHERE id = ?')->execute([(int)input($_POST, 'id')]);
-        $message = 'Invitation deleted.';
+        $message = t('admin.guest.deleted');
     } elseif ($action === 'delete_selected' || $action === 'send_selected') {
         // The ticked rows in the guest table (ids[] from the checkboxes).
         $ids = is_array($_POST['ids'] ?? null) ? $_POST['ids'] : [];
@@ -367,12 +409,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $batches = array_map(fn($batch) => [$batch, implode(',', array_fill(0, count($batch), '?'))], array_chunk($ids, 500));
         $settings = mail_settings();
         if ($tooMany) {
-            $message = 'That\'s more invitations than can be sent in one go, so nothing was changed. Untick some and do it in two goes.';
+            $message = t('admin.bulk.too_many');
         } elseif (!$ids) {
-            $message = 'Tick the invitations you want to ' . ($action === 'send_selected' ? 'send' : 'delete') . ' first.';
+            $message = t($action === 'send_selected' ? 'admin.bulk.tick_send' : 'admin.bulk.tick_delete');
         } elseif ($action === 'send_selected') {
             if (!valid_email($settings['from'])) {
-                $message = 'The From address on the Invitation email tab isn\'t valid, so nothing was sent.';
+                $message = t('admin.bulk.bad_from');
             } else {
                 set_time_limit(300);
                 $chosen = [];
@@ -396,13 +438,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $failed[] = $g['name'];
                     }
                 }
-                $message = 'Sent ' . $sent . ' ' . ($sent === 1 ? 'invitation' : 'invitations')
-                    . ($resent ? " ($resent of them again)" : '') . '.';
+                $message = t('admin.bulk.sent', ['count' => $sent]) . ($resent ? ' ' . t('admin.bulk.sent_again', ['count' => $resent]) : '');
                 if ($noEmail) {
-                    $message .= ' No email address for: ' . implode(', ', $noEmail) . '.';
+                    $message .= ' ' . t('admin.bulk.no_email', ['names' => join_names($noEmail)]);
                 }
                 if ($failed) {
-                    $message .= ' Could not send to: ' . implode(', ', $failed) . '. Your host may limit emails per hour; try again later.';
+                    $message .= ' ' . t('admin.send_failed', ['names' => join_names($failed)]);
                 }
             }
         } else {
@@ -412,7 +453,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $q->execute($batch);
                 $deleted += $q->rowCount();
             }
-            $message = 'Deleted ' . $deleted . ' ' . ($deleted === 1 ? 'invitation' : 'invitations') . '.';
+            $message = t('admin.bulk.deleted', ['count' => $deleted]);
         }
     } elseif (in_array($action, ['save_email', 'preview', 'send_test', 'send_all'], true)) {
         $back = 'email';
@@ -437,18 +478,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $settings = mail_settings();
-        $message = $mailLang === site_language() ? 'Email saved.' : 'Saved the ' . LANGUAGE_NAMES[$mailLang] . ' version.';
+        $message = $mailLang === site_language() ? t('admin.email.saved') : t('admin.saved_version', ['language' => LANGUAGE_NAMES[$mailLang]]);
 
         if (!valid_email($settings['from'])) {
-            $message = 'Email saved, but the From address isn\'t valid, so nothing was sent.';
+            $message = t('admin.email.saved_bad_from');
         } elseif ($action === 'send_test') {
             if (!valid_email($settings['reply_to'])) {
-                $message = 'Add your own email under "Replies go to" so the test has somewhere to go.';
+                $message = t('admin.email.need_reply_to');
             } else {
                 $sample = ['name' => 'Test Guest', 'email' => $settings['reply_to'], 'code' => 'TEST1234', 'language' => $mailLang];
                 $message = send_invite($sample, $settings)
-                    ? 'Test sent to ' . $settings['reply_to'] . '.'
-                    : 'The test could not be sent. Check the From address is an email account on your domain.';
+                    ? t('admin.test_sent', ['email' => $settings['reply_to']])
+                    : t('admin.email.test_failed');
             }
         } elseif ($action === 'send_all') {
             set_time_limit(300);
@@ -465,11 +506,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $failed[] = $g['name'];
                 }
             }
-            $message = $pending
-                ? "Sent $sent " . ($sent === 1 ? 'invitation' : 'invitations') . '.'
-                : 'Everyone with an email address has already been sent their invitation.';
+            $message = $pending ? t('admin.bulk.sent', ['count' => $sent]) : t('admin.email.all_sent');
             if ($failed) {
-                $message .= ' Could not send to: ' . implode(', ', $failed) . '. Your host may limit emails per hour; try again later.';
+                $message .= ' ' . t('admin.send_failed', ['names' => join_names($failed)]);
             }
         }
     } elseif ($action === 'update') {
@@ -479,28 +518,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $greetingStyle = in_array(input($_POST, 'greeting_style'), ['full', 'first'], true) ? input($_POST, 'greeting_style') : null;
         preg_match('/^.{0,120}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'greeting'))), $m);   // one line, 120 characters
         $greeting = trim($m[0] ?? '');
+        $language = input($_POST, 'language');
         $q = db()->prepare('SELECT * FROM guests WHERE id = ?');
         $q->execute([$id]);
         $g = $q->fetch();
         if (!$g) {
-            $message = 'That invitation no longer exists.';
+            $message = t('admin.guest.gone');
         } elseif ($name === '') {
-            $message = 'The name can\'t be empty, so nothing was changed.';
+            $message = t('admin.guest.no_name');
         } else {
             // A new address hasn't been sent anything yet.
             $emailChanged = $email !== clean_emails((string)$g['email']);
             db()->prepare('UPDATE guests SET name = ?, email = ?, invited_at = ?, greeting = ?, greeting_style = ? WHERE id = ?')
                 ->execute([$name, $email !== '' ? $email : null, $emailChanged ? null : $g['invited_at'],
                     $greeting !== '' ? $greeting : null, $greetingStyle, $id]);
-            $message = 'Saved changes to ' . $name . '.';
+            // A language picked here counts as set by admin; leaving it alone keeps how it was set.
+            if (isset($_POST['language']) && ($language !== (string)($g['language'] ?? ''))) {
+                $language = valid_language($language) ? $language : null;
+                db()->prepare('UPDATE guests SET language = ?, language_set_by = ? WHERE id = ?')
+                    ->execute([$language, $language ? 'admin' : null, $id]);
+            }
+            $message = t('admin.saved_changes', ['name' => $name]);
             if (has_bad_email($email)) {
-                $message .= sendable_emails($email)
-                    ? ' One of the email addresses looks wrong, so only the others will be used.'
-                    : ' That email address looks wrong, so they won\'t be emailed.';
+                $message .= ' ' . t(sendable_emails($email) ? 'admin.guest.one_bad' : 'admin.guest.bad');
             } elseif ($emailChanged && $email !== '' && $g['invited_at']) {
-                $message .= count(sendable_emails($email)) > 1
-                    ? ' The changed addresses haven\'t been sent the invitation yet. Sending it again sends a copy to each address.'
-                    : ' Their new address hasn\'t been sent the invitation yet.';
+                $message .= ' ' . t(count(sendable_emails($email)) > 1 ? 'admin.guest.changed_many' : 'admin.guest.changed_one');
             }
         }
     } elseif ($action === 'send_one') {
@@ -510,8 +552,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($g) {
             $count = count(sendable_emails($g['email']));
             $message = send_invite($g, mail_settings())
-                ? 'Invitation sent to ' . $g['name'] . ($count > 1 ? ($count === 2 ? ' (both addresses)' : " (all $count addresses)") : '') . '.'
-                : 'Could not send to ' . $g['name'] . ($count > 1 ? ' (at least one address)' : '') . '. Check their email address and the From address.';
+                ? ($count > 1 ? t('admin.guest.sent_many', ['name' => $g['name'], 'count' => $count]) : t('admin.guest.sent', ['name' => $g['name']]))
+                : t($count > 1 ? 'admin.guest.send_failed_some' : 'admin.guest.send_failed', ['name' => $g['name']]);
         }
 
     // --- Updates (bulk emails) ---
@@ -536,34 +578,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $t = find_template((int)input($_POST, 'delete_id'));
             if ($t) {
                 notify_db()->prepare('DELETE FROM email_templates WHERE id = ?')->execute([$t['id']]);
-                $message = "Deleted the \"{$t['name']}\" template.";
+                $message = t('admin.tpl.deleted', ['name' => $t['name']]);
             }
         } elseif ($draft['subject'] === '' || $draft['body'] === '') {
-            $message = 'Add a subject and a message first.';
+            $message = t('admin.upd.need_text');
         } elseif ($action === 'template_save' || $action === 'template_save_new') {
             $name = trim(input($_POST, 'template_name'));
             $existing = $action === 'template_save' ? find_template($draft['template_id']) : null;
             if ($existing) {
                 notify_db()->prepare('UPDATE email_templates SET subject = ?, body = ?, translations = ? WHERE id = ?')
                     ->execute([$draft['subject'], $draft['body'], $translationsJson, $existing['id']]);
-                $message = "Updated the \"{$existing['name']}\" template.";
+                $message = t('admin.tpl.updated', ['name' => $existing['name']]);
             } else {
                 $name = $name !== '' ? $name : $draft['subject'];
                 notify_db()->prepare('INSERT INTO email_templates (name, subject, body, translations) VALUES (?, ?, ?, ?)')
                     ->execute([$name, $draft['subject'], $draft['body'], $translationsJson]);
                 $_SESSION['update_draft']['template_id'] = (int)notify_db()->lastInsertId();
-                $message = "Saved as a new template, \"$name\".";
+                $message = t('admin.tpl.saved_new', ['name' => $name]);
             }
         } elseif (!valid_email($settings['from'])) {
-            $message = 'Set a valid From address on the Invitation email tab first.';
+            $message = t('admin.upd.bad_from');
         } elseif ($action === 'notify_test') {
             if (!valid_email($settings['reply_to'])) {
-                $message = 'Add your own email under "Replies go to" on the Invitation email tab, so the test has somewhere to go.';
+                $message = t('admin.upd.need_reply_to');
             } else {
                 $sample = ['name' => 'Test Guest', 'email' => $settings['reply_to'], 'code' => 'TEST1234'];
                 $message = send_update($sample, $draft['subject'], $draft['body'])
-                    ? 'Test sent to ' . $settings['reply_to'] . '.'
-                    : 'The test could not be sent. Check the From address on the Invitation email tab.';
+                    ? t('admin.test_sent', ['email' => $settings['reply_to']])
+                    : t('admin.upd.test_failed');
             }
         } else {   // notify_send
             set_time_limit(300);
@@ -578,9 +620,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             log_notification($draft['subject'], audiences()[$draft['audience']], $sent, count($failed), $me['name']);
-            $message = $recipients ? "Sent the update to $sent " . ($sent === 1 ? 'guest' : 'guests') . '.' : 'Nobody in that group can be emailed.';
+            $message = $recipients ? t('admin.upd.sent', ['count' => $sent]) : t('admin.upd.nobody');
             if ($failed) {
-                $message .= ' Could not send to: ' . implode(', ', $failed) . '. Your host may limit emails per hour; try again later.';
+                $message .= ' ' . t('admin.send_failed', ['names' => join_names($failed)]);
             }
             if ($sent) {
                 unset($_SESSION['update_draft']);
@@ -595,7 +637,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->exec('UPDATE feedback SET read_at = CURRENT_TIMESTAMP WHERE read_at IS NULL');
         } elseif ($action === 'feedback_delete') {
             db()->prepare('DELETE FROM feedback WHERE id = ?')->execute([$id]);
-            $message = 'Message deleted.';
+            $message = t('admin.fb.deleted');
         } else {
             db()->prepare('UPDATE feedback SET read_at = ' . ($action === 'feedback_read' ? 'CURRENT_TIMESTAMP' : 'NULL') . ' WHERE id = ?')
                 ->execute([$id]);
@@ -618,25 +660,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 save_section_translation($id, $lang, $title, $body, $me['name']);
                 unset($_SESSION['section_draft']);
-                $message = $title === '' && $body === ''
-                    ? 'Removed the ' . LANGUAGE_NAMES[$lang] . ' version. Guests reading ' . LANGUAGE_NAMES[$lang] . ' see the main version.'
-                    : 'Saved the ' . LANGUAGE_NAMES[$lang] . ' version.';
+                $message = t($title === '' && $body === '' ? 'admin.content.removed_version' : 'admin.saved_version',
+                    ['language' => LANGUAGE_NAMES[$lang]]);
                 $backExtra = '&section=' . $id . '&lang=' . urlencode($lang) . '#editor';
             }
         } elseif ($action === 'section_preview' || $title === '') {
             // Keep the unsaved draft and reopen the editor.
             $_SESSION['section_draft'] = compact('id', 'title', 'body', 'visible');
             $backExtra = '&section=' . ($id ?: 'new') . ($action === 'section_preview' ? '&show_preview=1' : '') . '#editor';
-            $message = $title === '' && $action === 'section_save' ? 'Give the section a title before saving.' : '';
+            $message = $title === '' && $action === 'section_save' ? t('admin.content.need_title') : '';
         } elseif ($id && find_section($id)) {
             content_db()->prepare('UPDATE sections SET title = ?, body = ?, visible = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?')
                 ->execute([$title, $body, $visible, $me['name'], $id]);
-            $message = "Saved \"$title\".";
+            $message = t('admin.content.saved', ['title' => $title]);
         } else {
             $next = (int)content_db()->query('SELECT COALESCE(MAX(position), 0) + 1 FROM sections')->fetchColumn();
             content_db()->prepare('INSERT INTO sections (title, body, visible, position, updated_by) VALUES (?, ?, ?, ?, ?)')
                 ->execute([$title, $body, $visible, $next, $me['name']]);
-            $message = "Added \"$title\"" . ($visible ? ' to the guest page.' : ' (hidden until you show it).');
+            $message = t($visible ? 'admin.content.added_shown' : 'admin.content.added_hidden', ['title' => $title]);
         }
         if ($action === 'section_save' && $title !== '') {
             unset($_SESSION['section_draft']);
@@ -660,7 +701,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($s) {
             content_db()->prepare('UPDATE sections SET visible = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ? WHERE id = ?')
                 ->execute([$s['visible'] ? 0 : 1, $me['name'], $s['id']]);
-            $message = '"' . $s['title'] . '" is now ' . ($s['visible'] ? 'hidden from guests.' : 'shown on the guest page.');
+            $message = t($s['visible'] ? 'admin.content.now_hidden' : 'admin.content.now_shown', ['title' => $s['title']]);
         }
     } elseif ($action === 'section_delete') {
         $back = 'content';
@@ -668,7 +709,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($s) {
             content_db()->prepare('DELETE FROM sections WHERE id = ?')->execute([$s['id']]);
             content_db()->prepare('DELETE FROM section_translations WHERE section_id = ?')->execute([$s['id']]);
-            $message = 'Deleted "' . $s['title'] . '".';
+            $message = t('admin.content.deleted', ['title' => $s['title']]);
         }
 
     // --- Your email address and feedback emails ---
@@ -679,17 +720,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $current = admin_contact((int)$me['id']);
         $changed = strtolower($email) !== strtolower($current['email']);
         if ($email !== '' && !valid_email($email)) {
-            $message = 'That email address doesn\'t look right, so nothing was changed.';
+            $message = t('admin.account.bad_email');
         } elseif ($notify && $email === '') {
-            $message = 'Add your email address to get feedback emails.';
+            $message = t('admin.account.need_email');
         } elseif ($changed && $me['id'] && !password_matches((int)$me['id'], input($_POST, 'current_password'))) {
             // Other admins' addresses are used for password resets, so changing
             // one needs their password, not just a signed-in browser.
-            $message = 'To change your email address, enter your current password too.';
+            $message = t('admin.account.need_password');
         } else {
             save_admin_contact((int)$me['id'], $email, $notify);
-            $message = $notify ? 'Saved. You\'ll get an email when a guest sends a message.' : 'Saved.';
+            $message = t($notify ? 'admin.account.saved_on' : 'admin.saved');
         }
+    } elseif ($action === 'account_language') {
+        $back = 'account';
+        save_admin_language((int)$me['id'], input($_POST, 'language'));
+        set_language(admin_language_choice((int)$me['id']) ?? visitor_language());
+        $message = t('admin.saved');
 
     // --- Your passkeys ---
     } elseif ($action === 'passkey_register') {
@@ -698,28 +744,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $origin = passkey_origin();
         $clientData = b64url_decode(input($_POST, 'client_data'));
         $attestation = b64url_decode(input($_POST, 'attestation'));
-        $result = 'That didn\'t work. Please try again.';
+        $result = t('admin.passkey.try_again');
         if ($challenge && $origin && (int)$challenge['user'] === (int)$me['id'] && $clientData !== null && $attestation !== null) {
             $result = verify_passkey_registration(['challenge' => $challenge['challenge'], 'origin' => $origin[1], 'rp_id' => $origin[0]],
                 $clientData, $attestation);
         }
         if (is_array($result) && find_passkey($result['credential_id'])) {
-            $message = 'That passkey has already been added.';
+            $message = t('admin.passkey.duplicate');
         } elseif (is_array($result)) {
             preg_match('/^.{0,60}/us', trim((string)preg_replace('/\s+/', ' ', input($_POST, 'passkey_name'))), $m);
             $first = !user_passkeys((int)$me['id']);
             passkeys_db()->prepare('INSERT INTO passkeys (user_id, credential_id, public_key, sign_count, name) VALUES (?, ?, ?, ?, ?)')
-                ->execute([(int)$me['id'], $result['credential_id'], $result['public_key'], $result['count'], trim($m[0] ?? '') ?: 'Passkey']);
-            $message = 'Passkey added.' . ($first ? ' From now on you\'ll need it to sign in, on its own or after your password.' : '');
+                ->execute([(int)$me['id'], $result['credential_id'], $result['public_key'], $result['count'], trim($m[0] ?? '') ?: t('admin.passkey.default_name')]);
+            $message = t($first ? 'admin.passkey.added_first' : 'admin.passkey.added');
         } else {
             $message = $result;
         }
     } elseif ($action === 'passkey_remove') {
         $back = 'account';
         passkeys_db()->prepare('DELETE FROM passkeys WHERE id = ? AND user_id = ?')->execute([(int)input($_POST, 'id'), (int)$me['id']]);
-        $message = user_passkeys((int)$me['id'])
-            ? 'Passkey removed.'
-            : 'Passkey removed. You can now sign in with just your password, so consider adding another.';
+        $message = t(user_passkeys((int)$me['id']) ? 'admin.passkey.removed' : 'admin.passkey.removed_last');
 
     // --- People (owner only) ---
     } elseif ($action === 'user_feedback') {
@@ -727,25 +771,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $back = 'people';
         if (!is_owner()) {
             http_response_code(403);
-            exit('Only the site owner can manage logins.');
+            exit(t('admin.people.owner_only'));
         }
         $id = (int)input($_POST, 'id');
         $on = input($_POST, 'notify_feedback') === '1';
-        $u = $id === 0 ? ['name' => 'You'] : find_user($id);
+        $u = $id === 0 ? ['name' => ''] : find_user($id);
         $contact = $u ? admin_contact($id) : null;
         if (!$u) {
-            $message = 'That person no longer exists.';
+            $message = t('admin.people.gone');
         } elseif ($on && !valid_email($contact['email'])) {
-            $message = $u['name'] . ' needs an email address first' . ($id === 0 ? ' (add it on Your account).' : ' (use Edit).');
+            $message = $id === 0 ? t('admin.people.need_email_you') : t('admin.people.need_email', ['name' => $u['name']]);
         } else {
             save_admin_contact($id, $contact['email'], $on);
-            $message = ($id === 0 ? 'You' : $u['name']) . ($on ? ' will now get' : ' will no longer get') . ' an email when a guest sends a message.';
+            $message = $id === 0 ? t($on ? 'admin.people.on_you' : 'admin.people.off_you')
+                : t($on ? 'admin.people.on' : 'admin.people.off', ['name' => $u['name']]);
         }
     } elseif (in_array($action, ['user_add', 'user_reset', 'user_remove', 'user_update'], true)) {
         $back = 'people';
         if (!is_owner()) {
             http_response_code(403);
-            exit('Only the site owner can manage logins.');
+            exit(t('admin.people.owner_only'));
         }
         $emailIt = input($_POST, 'send_email') === '1';
         if ($action === 'user_add') {
@@ -753,9 +798,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $username = normalise_username(input($_POST, 'username'));
             $email = trim(input($_POST, 'email'));
             if ($name === '' || !valid_username($username)) {
-                $message = 'Enter a name, and a username of 2-30 letters, numbers, dots, dashes or underscores ("admin" is taken).';
+                $message = t('admin.people.bad_new');
             } elseif ($email !== '' && !valid_email($email)) {
-                $message = 'That email address doesn\'t look right.';
+                $message = t('admin.people.bad_email');
             } else {
                 try {
                     users_db()->prepare('INSERT INTO users (name, username, email) VALUES (?, ?, ?)')
@@ -764,10 +809,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $url = new_setup_link((int)$u['id']);
                     $emailed = $emailIt && send_setup_email($u, $url, false);
                     $_SESSION['setup_link'] = ['name' => $name, 'url' => $url, 'emailed' => $emailed ? $email : ''];
-                    $message = "Added $name." . ($emailed ? " Their setup link has been emailed to $email."
-                        : ($emailIt && $email !== '' ? ' The email could not be sent, so send them the link below.' : ' Send them the setup link below.'));
+                    $message = t('admin.people.added', ['name' => $name]) . ' ' . ($emailed ? t('admin.people.emailed', ['email' => $email])
+                        : t($emailIt && $email !== '' ? 'admin.people.email_failed' : 'admin.people.send_link'));
                 } catch (PDOException $e) {
-                    $message = "The username \"$username\" is already in use.";
+                    $message = t('admin.people.taken', ['username' => $username]);
                 }
             }
         } else {
@@ -776,11 +821,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name = trim(input($_POST, 'name'));
                 $email = trim(input($_POST, 'email'));
                 if ($name === '' || ($email !== '' && !valid_email($email))) {
-                    $message = 'Enter a name and a valid email address (or leave the email empty).';
+                    $message = t('admin.people.bad_update');
                 } else {
                     users_db()->prepare('UPDATE users SET name = ?, email = ? WHERE id = ?')
                         ->execute([$name, $email !== '' ? $email : null, $u['id']]);
-                    $message = "Saved changes to $name.";
+                    $message = t('admin.saved_changes', ['name' => $name]);
                 }
             } elseif ($u && $action === 'user_reset') {
                 // Their old password stops working until they use the new link, and
@@ -791,13 +836,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $emailed = $emailIt && send_setup_email($u, $url, true);
                 $_SESSION['setup_link'] = ['name' => $u['name'], 'url' => $url, 'emailed' => $emailed ? $u['email'] : ''];
                 $message = $emailed
-                    ? "Emailed a new link to {$u['name']} ({$u['email']}). Their old password no longer works."
-                    : "New setup link for {$u['name']} below. Their old password no longer works."
-                      . ($emailIt ? ' The email could not be sent, so send them the link yourself.' : '');
+                    ? t('admin.people.reset_emailed', ['name' => $u['name'], 'email' => $u['email']])
+                    : t('admin.people.reset_link', ['name' => $u['name']]) . ($emailIt ? ' ' . t('admin.people.reset_email_failed') : '');
             } elseif ($u) {
                 users_db()->prepare('DELETE FROM users WHERE id = ?')->execute([$u['id']]);
                 passkeys_db()->prepare('DELETE FROM passkeys WHERE user_id = ?')->execute([$u['id']]);
-                $message = "Removed {$u['name']}. They can no longer sign in.";
+                $message = t('admin.people.removed', ['name' => $u['name']]);
             }
         }
 
@@ -824,6 +868,14 @@ $guests = db()->query('SELECT * FROM guests ORDER BY name COLLATE NOCASE')->fetc
 
 // --- Email preview (opened in a new tab) ----------------------------
 
+// The dark bar across the top of a preview, in the admin's language.
+function preview_bar(string $subject): string
+{
+    return '<div lang="' . h(current_language()) . '" dir="' . (is_rtl() ? 'rtl' : 'ltr') . '" style="position:sticky;top:0;padding:10px 16px;'
+        . 'background:#18181b;color:#fff;font:14px ' . email_font() . '">'
+        . t_html('admin.preview_bar', ['subject' => '<strong><bdi>' . h($subject) . '</bdi></strong>']) . '</div>';
+}
+
 if (isset($_GET['preview'])) {
     $previewLang = valid_language(input($_GET, 'lang')) ? input($_GET, 'lang') : site_language();
     $settings = mail_settings($previewLang);
@@ -831,9 +883,7 @@ if (isset($_GET['preview'])) {
     [$subject, , $html] = in_language($previewLang, fn() => render_invite($sample, $settings, email_photo_url()));
     // The email uses inline styles, which the site's normal policy blocks.
     header("Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
-    $bar = '<div style="position:sticky;top:0;padding:10px 16px;background:#18181b;color:#fff;'
-        . 'font:14px Helvetica,Arial,sans-serif">Preview &middot; Subject: <strong>' . h($subject) . '</strong>'
-        . ' &middot; shown for a sample guest</div>';
+    $bar = preview_bar($subject);
     echo preg_replace('/<body([^>]*)>/', '<body$1>' . $bar, $html, 1);
     exit;
 }
@@ -847,9 +897,7 @@ if (isset($_GET['preview_update'])) {
     $sample = ['name' => 'Sarah & Tom Jones', 'code' => 'K7MPX4QR'];
     [$subject, , $html] = in_language($lang, fn() => render_update($sample, $subject, $body, email_photo_url()));
     header("Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
-    $bar = '<div style="position:sticky;top:0;padding:10px 16px;background:#18181b;color:#fff;'
-        . 'font:14px Helvetica,Arial,sans-serif">Preview &middot; Subject: <strong>' . h($subject) . '</strong>'
-        . ' &middot; shown for a sample guest</div>';
+    $bar = preview_bar($subject);
     echo preg_replace('/<body([^>]*)>/', '<body$1>' . $bar, $html, 1);
     exit;
 }
@@ -861,13 +909,14 @@ if (input($_GET, 'export') === 'caterer') {
     header('Content-Disposition: attachment; filename="dietary-requirements.csv"');
     $out = fopen('php://output', 'w');
     $h = headcount($guests);
-    fputcsv($out, ['person', 'invitation', 'allergy or medical', 'requirements'], ',', '"', '');
+    fputcsv($out, [t('admin.csv.person'), t('admin.csv.invitation'), t('admin.csv.medical'), t('admin.csv.requirements')], ',', '"', '');
     foreach (catering_rows($guests) as $r) {
-        fputcsv($out, [csv_cell($r['person']), csv_cell($r['invitation']), $r['medical'] ? 'YES: ' . implode(', ', $r['medical']) : '',
-            csv_cell(implode(', ', $r['needs']))], ',', '"', '');
+        fputcsv($out, [csv_cell($r['person']), csv_cell($r['invitation']),
+            $r['medical'] ? csv_cell(t('admin.csv.yes', ['list' => join_names(array_map('diet_label', $r['medical']))])) : '',
+            csv_cell(join_names(array_map('diet_label', $r['needs'])))], ',', '"', '');
     }
     fputcsv($out, [], ',', '"', '');
-    fputcsv($out, ['Total people confirmed', $h['confirmed'] . ($h['confirmed_exact'] ? '' : '+')], ',', '"', '');
+    fputcsv($out, [t('admin.csv.total'), $h['confirmed'] . ($h['confirmed_exact'] ? '' : '+')], ',', '"', '');
     exit;
 }
 
@@ -908,19 +957,19 @@ foreach ($guests as $g) {
     }
 }
 
-page_header('Admin', 'admin');
+page_header(t('admin.title'), 'admin');
 ?>
 <?php
 $myPasskeys = count(user_passkeys((int)$me['id']));
 $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') : OWNER_USERNAME;
 ?>
 <header class="top wide">
-  <span class="brand">Admin <span class="version">v<?= h(SITE_VERSION) ?></span></span>
+  <span class="brand"><?= th('admin.title') ?> <bdi class="version" dir="ltr">v<?= h(SITE_VERSION) ?></bdi></span>
   <nav class="top-links">
-    <a class="link" href="/">View site</a>
+    <a class="link" href="/"><?= th('admin.view_site') ?></a>
     <?php /* Account menu: a <details> so it works by keyboard and without JavaScript. */ ?>
     <details class="account-menu">
-      <summary aria-label="Account: <?= h($me['name']) ?><?= $myPasskeys ? '' : ' (no passkey yet)' ?>">
+      <summary aria-label="<?= th($myPasskeys ? 'admin.menu_label' : 'admin.menu_label_nudge', ['name' => $me['name']]) ?>">
         <span class="avatar" aria-hidden="true"><?= h(initials($me['name'])) ?></span>
         <?php if (!$myPasskeys): ?><span class="avatar-dot" aria-hidden="true"></span><?php endif; ?>
       </summary>
@@ -929,18 +978,18 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
           <span class="avatar large" aria-hidden="true"><?= h(initials($me['name'])) ?></span>
           <div>
             <strong><?= h($me['name']) ?></strong>
-            <span><?= is_owner() ? 'Owner' : 'Admin' ?> · <?= h($myUsername) ?></span>
+            <span><?= th(is_owner() ? 'admin.role.owner' : 'admin.role.admin') ?> · <bdi><?= h($myUsername) ?></bdi></span>
           </div>
         </div>
         <a class="account-item" href="/admin.php?tab=account" <?= $tab === 'account' ? 'aria-current="page"' : '' ?>>
-          <span>Your account</span>
+          <span><?= th('admin.tab.account') ?></span>
           <small class="<?= $myPasskeys ? '' : 'nudge' ?>"><?= $myPasskeys
-              ? $myPasskeys . ' passkey' . ($myPasskeys === 1 ? '' : 's')
-              : 'No passkey yet: add one' ?><?= admin_contact((int)$me['id'])['notify'] ? ' · feedback emails on' : '' ?></small>
+              ? th('admin.passkey.count', ['count' => $myPasskeys])
+              : th('admin.passkey.none_nudge') ?><?= admin_contact((int)$me['id'])['notify'] ? ' · ' . th('admin.feedback_on') : '' ?></small>
         </a>
         <form method="post" class="account-signout">
           <?= csrf_field() ?>
-          <button class="account-item" name="action" value="logout">Sign out</button>
+          <button class="account-item" name="action" value="logout"><?= th('admin.sign_out') ?></button>
         </form>
       </div>
     </details>
@@ -948,7 +997,7 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 </header>
 
 <main class="content wide">
-  <nav class="tabs" aria-label="Admin sections">
+  <nav class="tabs" aria-label="<?= th('admin.tabs_label') ?>">
     <?php foreach ($tabs as $key => $label): if ($key === 'account') continue;   // in the account menu instead ?>
       <a href="/admin.php?tab=<?= $key ?>" <?= $key === $tab ? 'aria-current="page"' : '' ?>><?= h($label) ?></a>
     <?php endforeach; ?>
@@ -959,27 +1008,27 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 <?php if ($tab === 'guests'): ?>
 
   <section class="stats">
-    <div><strong><?= $counts['yes'] ?></strong><span>Attending</span>
-      <small><?= $people ?><?= $peopleUnknown ? '+' : '' ?> <?= $people === 1 && !$peopleUnknown ? 'person' : 'people' ?></small></div>
-    <div><strong><?= $counts['no'] ?></strong><span>Not attending</span></div>
-    <div><strong><?= $counts['maybe'] ?></strong><span>Getting back to you</span></div>
-    <div><strong><?= $counts['waiting'] ?></strong><span>No reply</span></div>
+    <div><strong><?= $counts['yes'] ?></strong><span><?= th('admin.stat.attending') ?></span>
+      <small><?= th($peopleUnknown ? 'admin.stat.people_plus' : 'admin.stat.people', ['count' => $people]) ?></small></div>
+    <div><strong><?= $counts['no'] ?></strong><span><?= th('admin.stat.not_attending') ?></span></div>
+    <div><strong><?= $counts['maybe'] ?></strong><span><?= th('admin.stat.maybe') ?></span></div>
+    <div><strong><?= $counts['waiting'] ?></strong><span><?= th('admin.stat.no_reply') ?></span></div>
   </section>
 
   <?php $diet = dietary_mix($guests); $segments = top_with_other($diet['mix']); ?>
   <section class="card diet-summary">
-    <h2>Dietary requirements</h2>
+    <h2><?= th('admin.diet.title') ?></h2>
     <?php if (!$segments): ?>
-      <p class="hint">None yet. This fills in as guests who are coming choose their dietary requirements.</p>
+      <p class="hint"><?= th('admin.diet.none') ?></p>
     <?php else: $totalMentions = array_sum($segments); ?>
       <div class="diet-chart">
         <?= dietary_donut_svg($segments, $diet['people_with'], $diet['people_coming']) ?>
         <table class="diet-legend">
-          <thead><tr><th>Requirement</th><th>Mentions</th><th>Share</th></tr></thead>
+          <thead><tr><th><?= th('admin.diet.requirement') ?></th><th><?= th('admin.diet.mentions') ?></th><th><?= th('admin.diet.share') ?></th></tr></thead>
           <tbody>
           <?php $i = 0; foreach ($segments as $label => $count): ?>
             <tr data-seg="<?= $i ?>">
-              <td><span class="swatch swatch-<?= $label === 'Other' ? 'other' : $i ?>"></span><?= h($label) ?></td>
+              <td><span class="swatch swatch-<?= $label === 'Other' ? 'other' : $i ?>"></span><?= h(segment_label($label)) ?></td>
               <td><?= $count ?></td>
               <td><?= round($count / $totalMentions * 100) ?>%</td>
             </tr>
@@ -987,31 +1036,28 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
           </tbody>
         </table>
       </div>
-      <p class="hint"><?= $diet['people_with'] ?> of the <?= $diet['people_coming'] ?> people coming have at least one requirement.
-        Some have more than one, so the chart shows how often each is mentioned.
-        <?php if (isset($segments['Other'])): ?>"Other" groups the less common ones; the full list is in the Dietary column below and the CSV.<?php endif; ?></p>
+      <p class="hint"><?= th('admin.diet.hint', ['with' => $diet['people_with'], 'coming' => $diet['people_coming']]) ?>
+        <?php if (isset($segments['Other'])): ?><?= th('admin.diet.other_hint', ['other' => t('admin.diet.other')]) ?><?php endif; ?></p>
     <?php endif; ?>
   </section>
 
   <section class="card collapsible" data-key="add-invitations">
-    <?= card_heading('Add invitations', 'add-invitations') ?>
+    <?= card_heading(t('admin.add.title'), 'add-invitations') ?>
     <div class="card-body" id="add-invitations-body">
       <form method="post">
         <?= csrf_field() ?>
-        <label for="guests">One per line: <em>Name; email</em>. Email is optional, and a couple can have one each
-          (<em>Name; email; email</em>). Each line gets its own code.</label>
-        <textarea id="guests" name="guests" rows="5" placeholder="Sarah, Tom and Lily Jones; sarah@example.com&#10;Ali &amp; Jo Khan; ali@example.com; jo@example.com&#10;Uncle Bob"></textarea>
-        <button type="submit" name="action" value="add">Add</button>
+        <label for="guests"><?= t_html('admin.add.help', ['format' => '<em>' . th('admin.add.format') . '</em>', 'format2' => '<em>' . th('admin.add.format2') . '</em>']) ?></label>
+        <textarea id="guests" name="guests" rows="5" placeholder="<?= str_replace("\n", '&#10;', th('admin.add.placeholder')) ?>"></textarea>
+        <button type="submit" name="action" value="add"><?= th('admin.add.button') ?></button>
       </form>
       <form method="post" enctype="multipart/form-data" class="csv-upload">
         <?= csrf_field() ?>
-        <label for="csv">Or upload a spreadsheet saved as CSV</label>
-        <p class="hint" id="csv-hint">One invitation per row: the name in the first column, then any email addresses in the
-          next columns. Headings like <em>Name</em>, <em>Email</em> and <em>Email 2</em> are fine, and other columns are ignored.
-          Names already on the list are skipped, so it's safe to upload an updated file.</p>
+        <label for="csv"><?= th('admin.add.csv_label') ?></label>
+        <p class="hint" id="csv-hint"><?= t_html('admin.add.csv_hint', ['headings' => '<em lang="en">Name</em>, <em lang="en">Email</em>, <em lang="en">Email 2</em>',
+          'language' => '<em lang="en">Language</em>']) ?></p>
         <div class="csv-row">
           <input id="csv" type="file" name="csv" accept=".csv,text/csv" required aria-describedby="csv-hint">
-          <button type="submit" name="action" value="upload_csv">Upload</button>
+          <button type="submit" name="action" value="upload_csv"><?= th('admin.add.upload') ?></button>
         </div>
       </form>
     </div>
@@ -1019,127 +1065,144 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
   <section class="card">
     <div class="row-between">
-      <h2>Invitations (<?= count($guests) ?>)</h2>
-      <a class="link" href="/admin.php?export=1">Download CSV</a>
+      <h2><?= th('admin.guests.title', ['count' => count($guests)]) ?></h2>
+      <a class="link" href="/admin.php?export=1"><?= th('admin.guests.download') ?></a>
     </div>
     <form method="post" class="greeting-style">
       <?= csrf_field() ?>
-      <label for="greet-style">Greet guests by</label>
+      <label for="greet-style"><?= th('admin.greet.label') ?></label>
       <select id="greet-style" name="style" aria-describedby="greet-hint">
-        <option value="full" <?= site_greeting_style() === 'full' ? 'selected' : '' ?>>Full name (Sarah, Tom and Lily Jones)</option>
-        <option value="first" <?= site_greeting_style() === 'first' ? 'selected' : '' ?>>First names only (Sarah, Tom and Lily)</option>
+        <option value="full" <?= site_greeting_style() === 'full' ? 'selected' : '' ?>><?= th('admin.greet.full_example') ?></option>
+        <option value="first" <?= site_greeting_style() === 'first' ? 'selected' : '' ?>><?= th('admin.greet.first_example') ?></option>
       </select>
-      <button type="submit" class="secondary" name="action" value="greeting_style">Save</button>
-      <p class="hint" id="greet-hint">Used for "Dear …" in emails and the welcome on their invitation page.
-        Surnames the site has found are in <strong>bold</strong>. Edit an invitation to change just that one.</p>
+      <button type="submit" class="secondary" name="action" value="greeting_style"><?= th('admin.save') ?></button>
+      <p class="hint" id="greet-hint"><?= t_html('admin.greet.hint', ['bold' => '<strong>' . th('admin.greet.bold') . '</strong>']) ?></p>
     </form>
     <?php foreach ($guests as $g): if ($g['id'] != $editId) continue; ?>
       <form method="post" class="edit-guest" id="edit">
         <?= csrf_field() ?>
         <input type="hidden" name="id" value="<?= (int)$g['id'] ?>">
-        <p class="edit-title">Editing <?= h($g['name']) ?> <span class="hint">(code <?= h($g['code']) ?> stays the same)</span></p>
+        <p class="edit-title"><?= th('admin.edit.title', ['name' => $g['name']]) ?> <span class="hint"><?= th('admin.edit.code_same', ['code' => $g['code']]) ?></span></p>
         <p class="hint edit-people">
           <?php $members = party_members($g['name']); ?>
-          <?= $members
-              ? 'Dietary boxes for: ' . h(implode(', ', $members)) . '.'
-              : 'The name doesn\'t say how many people, so they get one dietary box for the whole party.' ?>
-          Separate people with <code>&amp;</code>, <code>,</code> or <code>and</code>; add a plus-one with <code>+ guest</code>.
+          <?= $members ? th('admin.edit.boxes', ['names' => join_names($members)]) : th('admin.edit.one_box') ?>
+          <?= t_html('admin.edit.separators', ['amp' => '<bdi><code>&amp;</code></bdi>', 'comma' => '<bdi><code>,</code></bdi>',
+              'and' => '<bdi><code>' . th('admin.edit.and_word') . '</code></bdi>', 'plus' => '<bdi dir="ltr"><code>+ guest</code></bdi>']) ?>
         </p>
-        <label>Name<input type="text" name="name" value="<?= h($g['name']) ?>" required autofocus></label>
-        <label>Email<input type="text" name="email" value="<?= h($g['email']) ?>" placeholder="Optional"
-          inputmode="email" autocomplete="off" spellcheck="false" aria-describedby="email-hint"></label>
-        <p class="hint edit-email" id="email-hint">For two or more addresses, separate them with commas. Each gets its own copy.</p>
-        <label>Greet them by
+        <label><?= th('admin.field.name') ?><input type="text" name="name" value="<?= h($g['name']) ?>" required autofocus></label>
+        <label><?= th('admin.field.email') ?><input type="text" name="email" value="<?= h($g['email']) ?>" placeholder="<?= th('admin.field.optional') ?>"
+          inputmode="email" autocomplete="off" spellcheck="false" dir="ltr" aria-describedby="email-hint"></label>
+        <p class="hint edit-email" id="email-hint"><?= th('admin.edit.email_hint') ?></p>
+        <label><?= th('admin.edit.greet_by') ?>
           <select name="greeting_style">
-            <option value="">Site choice (<?= site_greeting_style() === 'first' ? 'first names' : 'full name' ?>)</option>
-            <option value="full" <?= ($g['greeting_style'] ?? '') === 'full' ? 'selected' : '' ?>>Full name: <?= h($g['name']) ?></option>
-            <option value="first" <?= ($g['greeting_style'] ?? '') === 'first' ? 'selected' : '' ?>>First names: <?= h(first_names($g['name'])) ?></option>
+            <option value=""><?= th('admin.edit.site_choice', ['choice' => t(site_greeting_style() === 'first' ? 'admin.greet.first_names' : 'admin.greet.full_name')]) ?></option>
+            <option value="full" <?= ($g['greeting_style'] ?? '') === 'full' ? 'selected' : '' ?>><?= th('admin.edit.full_name', ['name' => $g['name']]) ?></option>
+            <option value="first" <?= ($g['greeting_style'] ?? '') === 'first' ? 'selected' : '' ?>><?= th('admin.edit.first_names', ['name' => first_names($g['name'])]) ?></option>
           </select></label>
-        <label>Or type the greeting<input type="text" name="greeting" value="<?= h((string)($g['greeting'] ?? '')) ?>" maxlength="120"
+        <label><?= th('admin.edit.type_greeting') ?><input type="text" name="greeting" value="<?= h((string)($g['greeting'] ?? '')) ?>" maxlength="120"
           placeholder="<?= h(greeting_name(['greeting' => ''] + $g)) ?>" aria-describedby="greeting-hint"></label>
-        <p class="hint edit-email" id="greeting-hint">Shown as "Dear …" in emails and on their page. Leave empty to use the choice above.</p>
-        <button type="submit" name="action" value="update">Save</button>
-        <a class="link" href="/admin.php?tab=guests#guest-<?= (int)$g['id'] ?>">Cancel</a>
+        <p class="hint edit-email" id="greeting-hint"><?= th('admin.edit.greeting_hint') ?></p>
+        <?php if (count(site_languages()) > 1): ?>
+        <label><?= th('admin.edit.language') ?>
+          <select name="language" aria-describedby="language-hint">
+            <option value=""><?= th('admin.edit.language_unknown', ['language' => LANGUAGE_NAMES[site_language()]]) ?></option>
+            <?php foreach (site_languages() as $code): ?>
+              <option value="<?= h($code) ?>" lang="<?= h($code) ?>" <?= ($g['language'] ?? '') === $code ? 'selected' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?></option>
+            <?php endforeach; ?>
+          </select></label>
+        <p class="hint edit-email" id="language-hint"><?= th('admin.edit.language_hint') ?></p>
+        <?php endif; ?>
+        <button type="submit" name="action" value="update"><?= th('admin.save') ?></button>
+        <a class="link" href="/admin.php?tab=guests#guest-<?= (int)$g['id'] ?>"><?= th('admin.cancel') ?></a>
       </form>
     <?php endforeach; ?>
     <?php if ($guests): ?>
     <form method="post" id="bulk" class="bulk-bar">
       <?= csrf_field() ?>
-      <span id="bulk-count" class="hint" aria-live="polite">Tick invitations to send or delete several at once.</span>
+      <span id="bulk-count" class="hint" aria-live="polite"><?= th('admin.bulk.hint') ?></span>
       <span class="bulk-actions">
       <button type="submit" class="bulk-send" name="action" value="send_selected"
-              data-confirm="Send the invitation to the ticked guests?">
+              data-confirm="<?= th('admin.bulk.confirm_send') ?>">
         <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>
         </svg>
-        <span class="bulk-send-label">Send selected</span>
+        <span class="bulk-send-label"><?= th('admin.bulk.send') ?></span>
       </button>
       <button type="submit" class="bulk-delete" name="action" value="delete_selected"
-              data-confirm="Delete the ticked invitations? This can't be undone.">
+              data-confirm="<?= th('admin.bulk.confirm_delete') ?>">
         <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"
              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>
         </svg>
-        Delete selected
+        <?= th('admin.bulk.delete') ?>
       </button>
       </span>
     </form>
     <?php endif; ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th class="select-cell"><input type="checkbox" id="select-all" aria-label="Select all invitations" hidden></th><th>Name</th><th>Email</th><th>Code</th><th>Emailed</th><th>Reply</th><th>Dietary</th><th title="Whether they want update emails">Updates</th><th></th></tr></thead>
+        <?php $manyLanguages = count(site_languages()) > 1; ?>
+        <thead><tr><th class="select-cell"><input type="checkbox" id="select-all" aria-label="<?= th('admin.guests.select_all') ?>" hidden></th>
+          <th><?= th('admin.field.name') ?></th><th><?= th('admin.field.email') ?></th><th><?= th('admin.guests.code') ?></th>
+          <th><?= th('admin.guests.emailed') ?></th><th><?= th('admin.guests.reply') ?></th><th><?= th('admin.guests.dietary') ?></th>
+          <?php if ($manyLanguages): ?><th><?= th('admin.guests.language') ?></th><?php endif; ?>
+          <th title="<?= th('admin.guests.updates_title') ?>"><?= th('admin.guests.updates') ?></th><th></th></tr></thead>
         <tbody>
         <?php foreach ($guests as $g):
             $status = rsvp_status($g);
             $who = attendees($g);
             $invited = count(party_members($g['name'])); ?>
           <tr id="guest-<?= (int)$g['id'] ?>" <?= $g['id'] == $editId ? 'class="editing"' : '' ?>>
-            <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="Select <?= h($g['name']) ?>"
+            <td class="select-cell"><input type="checkbox" name="ids[]" value="<?= (int)$g['id'] ?>" form="bulk" aria-label="<?= th('admin.guests.select', ['name' => $g['name']]) ?>"
               data-sendable="<?= sendable_emails($g['email']) ? '1' : '0' ?>" data-sent="<?= $g['invited_at'] ? '1' : '0' ?>"></td>
             <td class="name-cell"><?= name_html($g['name']) ?>
-              <?php if (greeting_name($g) !== $g['name']): ?><span class="greeted-as">Greeted as “<?= h(greeting_name($g)) ?>”</span><?php endif; ?></td>
+              <?php if (greeting_name($g) !== $g['name']): ?><span class="greeted-as"><?= th('admin.guests.greeted_as', ['name' => greeting_name($g)]) ?></span><?php endif; ?></td>
             <td class="email-cell">
               <?php foreach (email_list($g['email']) as $address): ?>
-                <span class="email-address"><?= h($address) ?><?php if (!valid_email($address)): ?> <span class="pill no">Check address</span><?php endif; ?></span>
+                <span class="email-address" dir="ltr"><?= h($address) ?><?php if (!valid_email($address)): ?> <span class="pill no" dir="auto"><?= th('admin.guests.check_address') ?></span><?php endif; ?></span>
               <?php endforeach; ?>
             </td>
             <td>
               <code><?= h($g['code']) ?></code>
-              <button type="button" class="link small" data-copy="<?= h(invite_link($g['code'])) ?>">Copy link</button>
+              <button type="button" class="link small" data-copy="<?= h(invite_link($g['code'])) ?>"><?= th('admin.copy_link') ?></button>
             </td>
             <td>
-              <?= $g['invited_at'] ? h(date('j M', strtotime($g['invited_at'] . ' UTC'))) : '—' ?>
+              <?= $g['invited_at'] ? h(admin_date(strtotime($g['invited_at'] . ' UTC'))) : '—' ?>
               <?php if (sendable_emails($g['email'])): ?>
                 <form method="post" class="inline"
-                      <?= $g['invited_at'] ? 'data-confirm="Send ' . h($g['name']) . ' their invitation again?"' : '' ?>>
+                      <?= $g['invited_at'] ? 'data-confirm="' . th('admin.guests.confirm_resend', ['name' => $g['name']]) . '"' : '' ?>>
                   <?= csrf_field() ?>
                   <input type="hidden" name="id" value="<?= (int)$g['id'] ?>">
-                  <button class="link small" name="action" value="send_one"><?= $g['invited_at'] ? 'Resend' : 'Send' ?></button>
+                  <button class="link small" name="action" value="send_one"><?= th($g['invited_at'] ? 'admin.guests.resend' : 'admin.guests.send') ?></button>
                 </form>
               <?php endif; ?>
             </td>
             <td>
-              <span class="pill <?= $status ?>"><?= ['yes' => 'Attending', 'no' => 'Declined', 'maybe' => 'Not sure yet', 'waiting' => '—'][$status] ?></span>
+              <span class="pill <?= $status ?>"><?= $status === 'waiting' ? '—' : th('admin.status.' . $status) ?></span>
               <?php if ($status === 'yes' && $invited > 1 && $who['count'] < $invited): ?>
-                <span class="who" title="<?= h(implode(', ', $who['names'])) ?>"><?= $who['count'] ?> of <?= $invited ?>: <?= h(implode(', ', $who['names'])) ?></span>
+                <span class="who" title="<?= h(implode(', ', $who['names'])) ?>"><?= th('admin.guests.some_coming', ['count' => $who['count'], 'invited' => $invited, 'names' => join_names($who['names'])]) ?></span>
               <?php elseif ($status === 'yes' && !$invited): ?>
-                <span class="who"><?= $who['known'] ? $who['count'] . ' coming' : 'number not given' ?></span>
+                <span class="who"><?= $who['known'] ? th('admin.guests.n_coming', ['count' => $who['count']]) : th('admin.guests.number_unknown') ?></span>
               <?php endif; ?>
             </td>
             <td class="dietary-cell"><?= $status === 'yes' && dietary_summary($g) !== '' ? h(dietary_summary($g)) : '—' ?></td>
+            <?php if ($manyLanguages): ?>
+            <td><?php if (valid_language($g['language'] ?? null)): ?><span lang="<?= h($g['language']) ?>"
+              title="<?= th(['guest' => 'admin.guests.lang_guest', 'admin' => 'admin.guests.lang_admin'][$g['language_set_by'] ?? ''] ?? 'admin.guests.lang_browser') ?>"><?= h(LANGUAGE_NAMES[$g['language']]) ?></span><?php else: ?>—<?php endif; ?></td>
+            <?php endif; ?>
             <td>
               <?php if (!sendable_emails($g['email'])): ?>—
-              <?php elseif ((int)$g['notify'] === 1): ?><span class="pill yes" title="Happy to get update emails">On</span>
-              <?php else: ?><span class="pill waiting" title="Opted out of update emails">Off</span>
+              <?php elseif ((int)$g['notify'] === 1): ?><span class="pill yes" title="<?= th('admin.guests.updates_on_title') ?>"><?= th('admin.on') ?></span>
+              <?php else: ?><span class="pill waiting" title="<?= th('admin.guests.updates_off_title') ?>"><?= th('admin.off') ?></span>
               <?php endif; ?>
             </td>
             <td>
-              <a class="link small" href="/admin.php?tab=guests&amp;edit=<?= (int)$g['id'] ?>#edit">Edit</a>
-              <form method="post" class="inline" data-confirm="Delete <?= h($g['name']) ?>?">
+              <a class="link small" href="/admin.php?tab=guests&amp;edit=<?= (int)$g['id'] ?>#edit"><?= th('admin.edit') ?></a>
+              <form method="post" class="inline" data-confirm="<?= th('admin.guests.confirm_delete', ['name' => $g['name']]) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int)$g['id'] ?>">
-                <button class="link small danger" name="action" value="delete">Delete</button>
+                <button class="link small danger" name="action" value="delete"><?= th('admin.delete') ?></button>
               </form>
             </td>
           </tr>
@@ -1161,17 +1224,17 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     $ago = function (?string $when): string {
         if (!$when) return '—';
         $days = (int)floor((time() - strtotime($when . ' UTC')) / 86400);
-        return $days <= 0 ? 'today' : ($days === 1 ? 'yesterday' : "$days days ago");
+        return $days <= 0 ? t('admin.ago.today') : ($days === 1 ? t('admin.ago.yesterday') : t('admin.ago.days', ['count' => $days]));
     };
-    $first = $funnel['steps']['Invitations'] ?: 1;
+    $first = $funnel['steps']['invitations'] ?: 1;
 ?>
 
   <section class="card">
-    <h2>Replies so far</h2>
+    <h2><?= th('admin.ins.replies') ?></h2>
     <div class="funnel">
       <?php foreach ($funnel['steps'] as $label => $count): ?>
         <div class="funnel-row">
-          <span class="funnel-label"><?= h($label) ?></span>
+          <span class="funnel-label"><?= th('admin.funnel.' . $label) ?></span>
           <svg class="funnel-bar" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
             <rect class="track" width="100" height="10" rx="2"/>
             <rect class="fill" width="<?= max(0.8, round($count / $first * 100, 1)) ?>" height="10" rx="2"/>
@@ -1180,69 +1243,70 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         </div>
       <?php endforeach; ?>
     </div>
-    <p class="hint">Of those who replied: <?= $funnel['split']['yes'] ?> coming, <?= $funnel['split']['no'] ?> not coming,
-      <?= $funnel['split']['maybe'] ?> not sure yet. "Visited" counts guests who have opened their invitation page.</p>
+    <p class="hint"><?= th('admin.ins.split', $funnel['split'] + ['visited' => t('admin.funnel.visited')]) ?></p>
   </section>
 
   <div class="insight-lists">
     <section class="card">
-      <h2>Visited, not replied <span class="count"><?= count($visitedNoReply) ?></span></h2>
-      <p class="hint">They've looked at the site but haven't answered. The best people for a gentle nudge.</p>
-      <?php if (!$visitedNoReply): ?><p class="empty">Nobody right now.</p><?php else: ?>
+      <h2><?= th('admin.ins.visited_title') ?> <span class="count"><?= count($visitedNoReply) ?></span></h2>
+      <p class="hint"><?= th('admin.ins.visited_hint') ?></p>
+      <?php if (!$visitedNoReply): ?><p class="empty"><?= th('admin.ins.nobody') ?></p><?php else: ?>
       <ul class="people-list">
         <?php foreach ($visitedNoReply as $g): ?>
-          <li><span><?= h($g['name']) ?></span><span class="hint">last visit <?= $ago($g['last_visit_at']) ?></span></li>
+          <li><span><?= h($g['name']) ?></span><span class="hint"><?= th('admin.ins.last_visit', ['when' => $ago($g['last_visit_at'])]) ?></span></li>
         <?php endforeach; ?>
       </ul>
       <?php endif; ?>
     </section>
     <section class="card">
-      <h2>Emailed, not visited <span class="count"><?= count($emailedNotVisited) ?></span></h2>
-      <p class="hint">The email may be in their spam folder, or they've not seen it yet.</p>
-      <?php if (!$emailedNotVisited): ?><p class="empty">Nobody right now.</p><?php else: ?>
+      <h2><?= th('admin.ins.emailed_title') ?> <span class="count"><?= count($emailedNotVisited) ?></span></h2>
+      <p class="hint"><?= th('admin.ins.emailed_hint') ?></p>
+      <?php if (!$emailedNotVisited): ?><p class="empty"><?= th('admin.ins.nobody') ?></p><?php else: ?>
       <ul class="people-list">
         <?php foreach ($emailedNotVisited as $g): ?>
-          <li><span><?= h($g['name']) ?></span><span class="hint">emailed <?= $ago($g['invited_at']) ?></span></li>
+          <li><span><?= h($g['name']) ?></span><span class="hint"><?= th('admin.ins.emailed_when', ['when' => $ago($g['invited_at'])]) ?></span></li>
         <?php endforeach; ?>
       </ul>
       <?php endif; ?>
     </section>
     <section class="card">
-      <h2>Not sure yet <span class="count"><?= count($notSure) ?></span></h2>
-      <p class="hint">Longest waiting first.</p>
-      <?php if (!$notSure): ?><p class="empty">Nobody right now.</p><?php else: ?>
+      <h2><?= th('admin.status.maybe') ?> <span class="count"><?= count($notSure) ?></span></h2>
+      <p class="hint"><?= th('admin.ins.longest') ?></p>
+      <?php if (!$notSure): ?><p class="empty"><?= th('admin.ins.nobody') ?></p><?php else: ?>
       <ul class="people-list">
         <?php foreach ($notSure as $g): ?>
-          <li><span><?= h($g['name']) ?></span><span class="hint">said so <?= $ago($g['responded_at']) ?></span></li>
+          <li><span><?= h($g['name']) ?></span><span class="hint"><?= th('admin.ins.said_when', ['when' => $ago($g['responded_at'])]) ?></span></li>
         <?php endforeach; ?>
       </ul>
       <?php endif; ?>
     </section>
   </div>
-  <p class="hint insight-tip">To nudge people, use the <a href="/admin.php?tab=updates">Updates</a> tab: "Not replied yet" or "Not sure yet" with the "Reminder to reply" or "Not sure yet nudge" template.</p>
+  <p class="hint insight-tip"><?= t_html('admin.ins.tip', ['updates' => '<a href="/admin.php?tab=updates">' . th('admin.tab.updates') . '</a>'],
+      ['no_reply' => t('admin.aud.no_reply'), 'maybe' => t('admin.aud.maybe'),
+       'reminder' => in_language(site_language(), fn() => t('tpl.reminder.name')), 'nudge' => in_language(site_language(), fn() => t('tpl.nudge.name'))]) ?></p>
 
   <section class="card">
     <div class="row-between">
-      <h2>Headcount and catering</h2>
-      <a class="link" href="/admin.php?export=caterer">Download for the caterer (CSV)</a>
+      <h2><?= th('admin.ins.headcount') ?></h2>
+      <a class="link" href="/admin.php?export=caterer"><?= th('admin.ins.caterer_csv') ?></a>
     </div>
     <section class="stats headcount">
-      <div><strong><?= $hc['confirmed'] ?><?= $hc['confirmed_exact'] ? '' : '+' ?></strong><span>Confirmed</span></div>
-      <div><strong>+<?= $hc['maybe'] ?></strong><span>Maybe (not sure yet)</span></div>
-      <div><strong>+<?= $hc['no_reply'] ?></strong><span>Not replied</span></div>
-      <div><strong><?= $hc['confirmed'] ?>–<?= $hc['confirmed'] + $hc['maybe'] + $hc['no_reply'] ?></strong><span>Final number range</span></div>
+      <div><strong><?= $hc['confirmed'] ?><?= $hc['confirmed_exact'] ? '' : '+' ?></strong><span><?= th('admin.hc.confirmed') ?></span></div>
+      <div><strong dir="ltr">+<?= $hc['maybe'] ?></strong><span><?= th('admin.hc.maybe') ?></span></div>
+      <div><strong dir="ltr">+<?= $hc['no_reply'] ?></strong><span><?= th('admin.hc.no_reply') ?></span></div>
+      <div><strong dir="ltr"><?= $hc['confirmed'] ?>–<?= $hc['confirmed'] + $hc['maybe'] + $hc['no_reply'] ?></strong><span><?= th('admin.hc.range') ?></span></div>
     </section>
-    <p class="hint">The range runs from the people confirmed to everyone who could still come.
-      <?php if ($hc['plus_ones_offered']): ?>Plus-ones: <?= $hc['plus_ones_coming'] ?> of <?= $hc['plus_ones_offered'] ?> coming.<?php endif; ?>
-      <?php if (!$hc['confirmed_exact']): ?>"+" means a family hasn't said how many are coming.<?php endif; ?></p>
+    <p class="hint"><?= th('admin.hc.hint') ?>
+      <?php if ($hc['plus_ones_offered']): ?><?= th('admin.hc.plus_ones', ['coming' => $hc['plus_ones_coming'], 'offered' => $hc['plus_ones_offered']]) ?><?php endif; ?>
+      <?php if (!$hc['confirmed_exact']): ?><?= th('admin.hc.plus_note') ?><?php endif; ?></p>
 
-    <h3 class="sub">Dietary requirements by person</h3>
+    <h3 class="sub"><?= th('admin.ins.by_person') ?></h3>
     <?php if (!$catering): ?>
-      <p class="empty">None yet.</p>
+      <p class="empty"><?= th('admin.none_yet') ?></p>
     <?php else: ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Person</th><th>Invitation</th><th>Requirements</th></tr></thead>
+        <thead><tr><th><?= th('admin.ins.person') ?></th><th><?= th('admin.ins.invitation') ?></th><th><?= th('admin.ins.requirements') ?></th></tr></thead>
         <tbody>
         <?php foreach ($catering as $r): ?>
           <tr>
@@ -1250,7 +1314,7 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
             <td class="name-cell hint"><?= h($r['invitation']) ?></td>
             <td class="dietary-cell">
               <?php foreach ($r['needs'] as $need): ?>
-                <span class="need<?= is_medical_need($need) ? ' medical' : '' ?>"><?php if (is_medical_need($need)): ?><span class="sr-only">Allergy or medical: </span>⚠ <?php endif; ?><?= h($need) ?></span>
+                <span class="need<?= is_medical_need($need) ? ' medical' : '' ?>"><?php if (is_medical_need($need)): ?><span class="sr-only"><?= th('admin.ins.medical') ?> </span>⚠ <?php endif; ?><?= h(diet_label($need)) ?></span>
               <?php endforeach; ?>
             </td>
           </tr>
@@ -1258,29 +1322,29 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         </tbody>
       </table>
     </div>
-    <p class="hint">⚠ marks allergies and medical needs (listed first). Double-check these with guests before the day.</p>
+    <p class="hint"><?= th('admin.ins.medical_hint') ?></p>
     <?php endif; ?>
   </section>
 
   <section class="card">
-    <h2>Replies over time</h2>
+    <h2><?= th('admin.ins.over_time') ?></h2>
     <?php if (count($timeline['days']) < 2): ?>
-      <p class="empty">This chart appears once replies start coming in.</p>
+      <p class="empty"><?= th('admin.ins.chart_soon') ?></p>
     <?php else: ?>
       <?= reply_timeline_svg($timeline, count($guests)) ?>
-      <p class="hint"><span class="key-line"></span> Total invitations replied &nbsp; <span class="key-send"></span> Invitations or updates sent (hover for details)</p>
+      <p class="hint"><span class="key-line"></span> <?= th('admin.ins.key_line') ?> &nbsp; <span class="key-send"></span> <?= th('admin.ins.key_send') ?></p>
       <details class="timeline-table">
-        <summary>Show as a table</summary>
+        <summary><?= th('admin.ins.as_table') ?></summary>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Day</th><th>New replies</th><th>Total</th><th>Sent</th></tr></thead>
+            <thead><tr><th><?= th('admin.ins.day') ?></th><th><?= th('admin.ins.new') ?></th><th><?= th('admin.ins.total') ?></th><th><?= th('admin.ins.sent') ?></th></tr></thead>
             <tbody>
             <?php foreach (array_reverse($timeline['days'], true) as $day => $d): if (!$d['new'] && !isset($timeline['sends'][$day])) continue; ?>
               <tr>
-                <td><?= h(date('D j M', strtotime($day))) ?></td>
+                <td><?= h(admin_date(strtotime($day), 'weekday')) ?></td>
                 <td><?= $d['new'] ?: '—' ?></td>
                 <td><?= $d['total'] ?></td>
-                <td class="dietary-cell"><?= isset($timeline['sends'][$day]) ? h(implode(', ', array_map(fn($k, $v) => "$k ($v)", array_keys($timeline['sends'][$day]), $timeline['sends'][$day]))) : '' ?></td>
+                <td class="dietary-cell"><?= isset($timeline['sends'][$day]) ? h(sends_text($timeline['sends'][$day])) : '' ?></td>
               </tr>
             <?php endforeach; ?>
             </tbody>
@@ -1301,23 +1365,23 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
   // Where this language's wording comes from, for the hint.
   $source = function (string $key) use ($mailLang, $isMainLang): string {
       if (!$isMainLang && trim(setting($key . '.' . $mailLang)) !== '') {
-          return 'your ' . LANGUAGE_NAMES[$mailLang] . ' version';
+          return t('admin.email.src_translation', ['language' => LANGUAGE_NAMES[$mailLang]]);
       }
       if (own_wording($key, site_language()) !== '') {
-          return $isMainLang ? 'your own wording' : 'your ' . LANGUAGE_NAMES[site_language()] . ' version (not translated yet)';
+          return $isMainLang ? t('admin.email.src_own') : t('admin.email.src_main', ['language' => LANGUAGE_NAMES[site_language()]]);
       }
-      return 'the built-in ' . LANGUAGE_NAMES[$mailLang] . ' text';
+      return t('admin.email.src_builtin', ['language' => LANGUAGE_NAMES[$mailLang]]);
   };
   ?>
   <section class="card">
-    <h2>Invitation email</h2>
+    <h2><?= th('admin.tab.email') ?></h2>
     <?php if (count(site_languages()) > 1): ?>
-      <nav class="lang-tabs" aria-label="Language of this version">
+      <nav class="lang-tabs" aria-label="<?= th('admin.lang_tabs_label') ?>">
         <?php foreach (site_languages() as $code): $isMain = $code === site_language();
             $done = !$isMain && (trim(setting('mail_subject.' . $code)) !== '' || trim(setting('mail_body.' . $code)) !== '' || trim(setting('tagline.' . $code)) !== ''); ?>
           <a href="/admin.php?tab=email<?= $isMain ? '' : '&amp;lang=' . h($code) ?>" lang="<?= h($code) ?>"
              <?= $code === $mailLang ? 'aria-current="page"' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?><?php
-             if ($isMain): ?> <span class="hint">(main)</span><?php elseif ($done): ?> <span class="tick" aria-label="translated">✓</span><?php endif; ?></a>
+             if ($isMain): ?> <span class="hint"><?= th('admin.main') ?></span><?php elseif ($done): ?> <span class="tick" aria-label="<?= th('admin.translated') ?>">✓</span><?php endif; ?></a>
         <?php endforeach; ?>
       </nav>
     <?php endif; ?>
@@ -1326,37 +1390,32 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
       <input type="hidden" name="lang" value="<?= h($mailLang) ?>">
       <?php if ($isMainLang): ?>
       <div class="field-row">
-        <label>From name<input type="text" name="from_name" value="<?= h($mail['from_name']) ?>"></label>
-        <label>From address<input type="email" name="from" value="<?= h($mail['from']) ?>"></label>
-        <label>Replies go to<input type="email" name="reply_to" value="<?= h($mail['reply_to']) ?>" placeholder="you@example.com"></label>
+        <label><?= th('admin.email.from_name') ?><input type="text" name="from_name" value="<?= h($mail['from_name']) ?>"></label>
+        <label><?= th('admin.email.from') ?><input type="email" name="from" value="<?= h($mail['from']) ?>" dir="ltr"></label>
+        <label><?= th('admin.email.reply_to') ?><input type="email" name="reply_to" value="<?= h($mail['reply_to']) ?>" placeholder="you@example.com" dir="ltr"></label>
       </div>
-      <p class="hint">The From address should be an email account on your wedding domain, so emails aren't marked as spam. Replies and tests go to the "Replies go to" address.</p>
+      <p class="hint"><?= th('admin.email.from_hint') ?></p>
       <?php else: ?>
-      <p class="hint">Guests reading <?= h(LANGUAGE_NAMES[$mailLang]) ?> get this version. Leave a box empty to use
-        <?= h(LANGUAGE_NAMES[site_language()]) ?> wording you've written, or the built-in <?= h(LANGUAGE_NAMES[$mailLang]) ?> text if you haven't.
-        Guests whose language isn't known yet get the <?= h(LANGUAGE_NAMES[site_language()]) ?> version.</p>
+      <p class="hint"><?= th('admin.email.translation_hint', ['language' => LANGUAGE_NAMES[$mailLang], 'main' => LANGUAGE_NAMES[site_language()]]) ?></p>
       <?php endif; ?>
-      <label>Tagline<input type="text" name="tagline" value="<?= h($ownTagline) ?>" maxlength="60" <?= $fieldDir ?>
+      <label><?= th('admin.email.tagline') ?><input type="text" name="tagline" value="<?= h($ownTagline) ?>" maxlength="60" <?= $fieldDir ?>
         placeholder="<?= h(in_language($mailLang, 'tagline')) ?>" aria-describedby="tagline-hint"></label>
-      <p class="hint" id="tagline-hint">The short line above your names, on the page where guests enter their code and at
-        the top of this email. Now showing <?= h($source('tagline')) ?>. For example: <em>Save the date</em>,
-        <em>Join us</em> or <em>We're getting married</em>.</p>
-      <label>Subject<input type="text" name="subject" <?= $fieldDir ?>
+      <p class="hint" id="tagline-hint"><?= th('admin.email.tagline_hint', ['source' => $source('tagline')]) ?></p>
+      <label><?= th('admin.field.subject') ?><input type="text" name="subject" <?= $fieldDir ?>
         value="<?= h($isMainLang ? $here['subject'] : trim(setting('mail_subject.' . $mailLang))) ?>"
         placeholder="<?= h($here['subject']) ?>"></label>
-      <label>Message
+      <label><?= th('admin.field.message') ?>
         <textarea name="body" rows="12" <?= $fieldDir ?> placeholder="<?= h($isMainLang ? '' : $here['body']) ?>"><?= h($isMainLang ? $here['body'] : trim(setting('mail_body.' . $mailLang))) ?></textarea>
       </label>
-      <p class="hint"><code>{name}</code>, <code>{link}</code> and <code>{code}</code> are filled in for each guest. In the email, the link appears as a button.
-        The message is now <?= h($source('mail_body')) ?>.</p>
+      <p class="hint"><?= placeholders_hint() ?> <?= th('admin.email.message_source', ['source' => $source('mail_body')]) ?></p>
       <div class="actions">
-        <button type="submit" name="action" value="save_email" class="secondary">Save</button>
-        <button type="submit" name="action" value="preview" class="secondary" formtarget="_blank">Preview</button>
-        <button type="submit" name="action" value="send_test" class="secondary">Send test to me</button>
+        <button type="submit" name="action" value="save_email" class="secondary"><?= th('admin.save') ?></button>
+        <button type="submit" name="action" value="preview" class="secondary" formtarget="_blank"><?= th('admin.preview') ?></button>
+        <button type="submit" name="action" value="send_test" class="secondary"><?= th('admin.send_test') ?></button>
         <?php if ($isMainLang): ?>
         <button type="submit" name="action" value="send_all" <?= $unsent ? '' : 'disabled' ?>
-                data-confirm="Send the invitation to <?= $unsent ?> <?= $unsent === 1 ? 'guest' : 'guests' ?>? Each gets it in their own language.">
-          Send to <?= $unsent ?> not yet emailed
+                data-confirm="<?= th('admin.email.confirm_send_all', ['count' => $unsent]) ?>">
+          <?= th('admin.email.send_all', ['count' => $unsent]) ?>
         </button>
         <?php endif; ?>
       </div>
@@ -1379,10 +1438,9 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 ?>
 
   <section class="card">
-    <h2>Send an update</h2>
-    <p class="hint">Emails everyone in the group you choose who has an email address and hasn't turned updates off<?= $optedOut ? " ($optedOut " . ($optedOut === 1 ? 'guest has' : 'guests have') . ' turned them off)' : '' ?>.
-       Each email has its own unsubscribe link.</p>
-    <p class="add-section">Start from:
+    <h2><?= th('admin.upd.title') ?></h2>
+    <p class="hint"><?= $optedOut ? th('admin.upd.hint_opted_out', ['count' => $optedOut]) : th('admin.upd.hint') ?></p>
+    <p class="add-section"><?= th('admin.upd.start_from') ?>
       <?php foreach ($templates as $t): ?>
         <a class="chip-link<?= $current && (int)$current['id'] === (int)$t['id'] ? ' active' : '' ?>" href="/admin.php?tab=updates&amp;template=<?= (int)$t['id'] ?>"><?= h($t['name']) ?></a>
       <?php endforeach; ?>
@@ -1390,67 +1448,69 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
     <form method="post" class="email-form">
       <?= csrf_field() ?>
       <input type="hidden" name="template_id" value="<?= (int)$draft['template_id'] ?>">
-      <label>Send to
+      <label><?= th('admin.upd.send_to') ?>
         <select name="audience" class="party-size">
           <?php foreach (audiences() as $key => $label): $n = count(audience_guests($key)); ?>
             <option value="<?= $key ?>" <?= $draft['audience'] === $key ? 'selected' : '' ?>><?= h($label) ?> (<?= $n ?>)</option>
           <?php endforeach; ?>
         </select>
       </label>
-      <label>Subject<input type="text" name="subject" value="<?= h($draft['subject']) ?>"></label>
-      <label>Message
-        <textarea name="body" rows="12"><?= h($draft['body']) ?></textarea>
+      <?php $mainDir = 'lang="' . h(site_language()) . '" dir="' . (is_rtl(site_language()) ? 'rtl' : 'ltr') . '"'; ?>
+      <label><?= th('admin.field.subject') ?><input type="text" name="subject" value="<?= h($draft['subject']) ?>" <?= $mainDir ?>></label>
+      <label><?= th('admin.field.message') ?>
+        <textarea name="body" rows="12" <?= $mainDir ?>><?= h($draft['body']) ?></textarea>
       </label>
-      <p class="hint"><code>{name}</code>, <code>{link}</code> and <code>{code}</code> are filled in for each guest. In the email, the link appears as a button.</p>
+      <p class="hint"><?= placeholders_hint() ?></p>
+      <?php $adminDir = 'lang="' . h(current_language()) . '" dir="' . (is_rtl() ? 'rtl' : 'ltr') . '"'; ?>
       <?php if ($otherLanguages): $written = count(array_filter($draft['translations'], fn($tr) => $tr['body'] !== '')); ?>
         <details class="translations">
-          <summary>Translations (<?= $written ?> of <?= count($otherLanguages) ?>)</summary>
-          <p class="hint">Each guest gets the version in their language. Where there isn't one, they get the message above. The wording around it, such as the unsubscribe line, is always in their language.</p>
+          <summary><?= th('admin.upd.translations', ['done' => $written, 'total' => count($otherLanguages)]) ?></summary>
+          <p class="hint"><?= th('admin.upd.translations_hint') ?></p>
           <?php foreach ($otherLanguages as $code): $tr = $draft['translations'][$code] ?? ['subject' => '', 'body' => '']; ?>
             <details class="translation">
-              <summary><bdi lang="<?= h($code) ?>"><?= h(LANGUAGE_NAMES[$code]) ?></bdi><?= $tr['body'] !== '' ? ' <span class="tick" aria-label="written">✓</span>' : '' ?></summary>
+              <summary><bdi lang="<?= h($code) ?>"><?= h(LANGUAGE_NAMES[$code]) ?></bdi><?= $tr['body'] !== '' ? ' <span class="tick" aria-label="' . th('admin.written') . '">✓</span>' : '' ?></summary>
               <div lang="<?= h($code) ?>" dir="<?= in_array($code, RTL_LANGUAGES, true) ? 'rtl' : 'ltr' ?>">
-                <label><span lang="en" dir="ltr">Subject</span><input type="text" name="tr[<?= h($code) ?>][subject]" value="<?= h($tr['subject']) ?>"></label>
-                <label><span lang="en" dir="ltr">Message</span><textarea name="tr[<?= h($code) ?>][body]" rows="10"><?= h($tr['body']) ?></textarea></label>
+                <label><span <?= $adminDir ?>><?= th('admin.field.subject') ?></span><input type="text" name="tr[<?= h($code) ?>][subject]" value="<?= h($tr['subject']) ?>"></label>
+                <label><span <?= $adminDir ?>><?= th('admin.field.message') ?></span><textarea name="tr[<?= h($code) ?>][body]" rows="10"><?= h($tr['body']) ?></textarea></label>
               </div>
-              <button type="submit" name="action" value="notify_preview" class="secondary" formtarget="_blank" formaction="/admin.php?preview_lang=<?= h($code) ?>">Preview in <bdi lang="<?= h($code) ?>"><?= h(LANGUAGE_NAMES[$code]) ?></bdi></button>
+              <button type="submit" name="action" value="notify_preview" class="secondary" formtarget="_blank" formaction="/admin.php?preview_lang=<?= h($code) ?>"><?= t_html('admin.upd.preview_in', ['language' => '<bdi lang="' . h($code) . '">' . h(LANGUAGE_NAMES[$code]) . '</bdi>']) ?></button>
             </details>
           <?php endforeach; ?>
         </details>
       <?php endif; ?>
       <div class="actions">
-        <button type="submit" name="action" value="notify_preview" class="secondary" formtarget="_blank">Preview</button>
-        <button type="submit" name="action" value="notify_test" class="secondary">Send test to me</button>
-        <button type="submit" name="action" value="notify_send" data-confirm="Send this update to everyone in the chosen group?">Send update</button>
+        <button type="submit" name="action" value="notify_preview" class="secondary" formtarget="_blank"><?= th('admin.preview') ?></button>
+        <button type="submit" name="action" value="notify_test" class="secondary"><?= th('admin.send_test') ?></button>
+        <button type="submit" name="action" value="notify_send" data-confirm="<?= th('admin.upd.confirm_send') ?>"><?= th('admin.upd.send') ?></button>
       </div>
       <details class="save-template">
-        <summary>Save as a template</summary>
+        <summary><?= th('admin.tpl.save_as') ?></summary>
         <div class="actions">
           <?php if ($current): ?>
-            <button type="submit" name="action" value="template_save" class="secondary">Update "<?= h($current['name']) ?>"</button>
+            <button type="submit" name="action" value="template_save" class="secondary"><?= th('admin.tpl.update', ['name' => $current['name']]) ?></button>
           <?php endif; ?>
-          <input type="text" name="template_name" placeholder="New template name">
-          <button type="submit" name="action" value="template_save_new" class="secondary">Save as new template</button>
+          <input type="text" name="template_name" placeholder="<?= th('admin.tpl.new_name') ?>">
+          <button type="submit" name="action" value="template_save_new" class="secondary"><?= th('admin.tpl.save_new') ?></button>
         </div>
       </details>
     </form>
   </section>
 
   <section class="card">
-    <h2>Templates</h2>
+    <h2><?= th('admin.tpl.title') ?></h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Subject</th><th></th></tr></thead>
+        <thead><tr><th><?= th('admin.field.name') ?></th><th><?= th('admin.field.subject') ?></th><th></th></tr></thead>
         <tbody>
         <?php foreach ($templates as $t): ?>
           <tr>
             <td><?= h($t['name']) ?></td>
             <td class="dietary-cell"><?= h($t['subject']) ?></td>
             <td class="row-actions">
-              <a class="link small" href="/admin.php?tab=updates&amp;template=<?= (int)$t['id'] ?>">Use</a>
-              <form method="post" class="inline" data-confirm="Delete the &quot;<?= h($t['name']) ?>&quot; template?">
+              <a class="link small" href="/admin.php?tab=updates&amp;template=<?= (int)$t['id'] ?>"><?= th('admin.tpl.use') ?></a>
+              <form method="post" class="inline" data-confirm="<?= th('admin.tpl.confirm_delete', ['name' => $t['name']]) ?>">
                 <?= csrf_field() ?><input type="hidden" name="delete_id" value="<?= (int)$t['id'] ?>">
-                <button class="link small danger" name="action" value="template_delete">Delete</button>
+                <button class="link small danger" name="action" value="template_delete"><?= th('admin.delete') ?></button>
               </form>
             </td>
           </tr>
@@ -1461,20 +1521,20 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
   </section>
 
   <section class="card">
-    <h2>Sent updates</h2>
+    <h2><?= th('admin.upd.history') ?></h2>
     <?php if (!$history): ?>
-      <p class="hint">Nothing sent yet.</p>
+      <p class="hint"><?= th('admin.upd.nothing') ?></p>
     <?php else: ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Sent</th><th>Subject</th><th>To</th><th>Delivered</th><th>By</th></tr></thead>
+        <thead><tr><th><?= th('admin.upd.h_sent') ?></th><th><?= th('admin.field.subject') ?></th><th><?= th('admin.upd.h_to') ?></th><th><?= th('admin.upd.h_delivered') ?></th><th><?= th('admin.upd.h_by') ?></th></tr></thead>
         <tbody>
         <?php foreach ($history as $n): ?>
           <tr>
-            <td><?= h(date('j M, H:i', strtotime($n['sent_at'] . ' UTC'))) ?></td>
+            <td><?= h(admin_date(strtotime($n['sent_at'] . ' UTC'), 'time')) ?></td>
             <td class="dietary-cell"><?= h($n['subject']) ?></td>
             <td><?= h($n['audience']) ?></td>
-            <td><?= (int)$n['sent'] ?><?= $n['failed'] ? ' <span class="pill no">' . (int)$n['failed'] . ' failed</span>' : '' ?></td>
+            <td><?= (int)$n['sent'] ?><?= $n['failed'] ? ' <span class="pill no">' . th('admin.upd.failed', ['count' => (int)$n['failed']]) . '</span>' : '' ?></td>
             <td><?= h($n['sent_by']) ?></td>
           </tr>
         <?php endforeach; ?>
@@ -1490,30 +1550,30 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
   <section class="card">
     <div class="row-between">
-      <h2>Feedback from guests</h2>
+      <h2><?= th('admin.fb.title') ?></h2>
       <?php if ($unreadFeedback): ?>
-        <form method="post"><?= csrf_field() ?><button class="link" name="action" value="feedback_read_all">Mark all as read</button></form>
+        <form method="post"><?= csrf_field() ?><button class="link" name="action" value="feedback_read_all"><?= th('admin.fb.read_all') ?></button></form>
       <?php endif; ?>
     </div>
-    <p class="hint">Sent from the "Send us feedback" button on the guest page.</p>
+    <p class="hint"><?= th('admin.fb.hint', ['button' => t('feedback.button')]) ?></p>
     <?php if (!$messages): ?>
-      <p>No feedback yet.</p>
+      <p><?= th('admin.fb.none') ?></p>
     <?php endif; ?>
     <?php foreach ($messages as $f): ?>
       <article class="feedback-item<?= $f['read_at'] ? '' : ' unread' ?>">
         <header>
           <strong><?= h($f['guest_name']) ?></strong>
-          <span class="hint"><?= h(date('j M Y, H:i', strtotime($f['created_at'] . ' UTC'))) ?></span>
-          <?php if (!$f['read_at']): ?><span class="pill maybe">New</span><?php endif; ?>
+          <span class="hint"><?= h(admin_date(strtotime($f['created_at'] . ' UTC'), 'full')) ?></span>
+          <?php if (!$f['read_at']): ?><span class="pill maybe"><?= th('admin.fb.new') ?></span><?php endif; ?>
         </header>
-        <p class="feedback-text"><?= nl2br(h($f['message'])) ?></p>
+        <p class="feedback-text" dir="auto"><?= nl2br(h($f['message'])) ?></p>
         <div class="row-actions">
           <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
-            <button class="link small" name="action" value="<?= $f['read_at'] ? 'feedback_unread' : 'feedback_read' ?>"><?= $f['read_at'] ? 'Mark as unread' : 'Mark as read' ?></button>
+            <button class="link small" name="action" value="<?= $f['read_at'] ? 'feedback_unread' : 'feedback_read' ?>"><?= th($f['read_at'] ? 'admin.fb.mark_unread' : 'admin.fb.mark_read') ?></button>
           </form>
-          <form method="post" class="inline" data-confirm="Delete this message from <?= h($f['guest_name']) ?>?"><?= csrf_field() ?>
+          <form method="post" class="inline" data-confirm="<?= th('admin.fb.confirm_delete', ['name' => $f['guest_name']]) ?>"><?= csrf_field() ?>
             <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
-            <button class="link small danger" name="action" value="feedback_delete">Delete</button>
+            <button class="link small danger" name="action" value="feedback_delete"><?= th('admin.delete') ?></button>
           </form>
         </div>
       </article>
@@ -1556,28 +1616,27 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
   <?php if ($editing): ?>
   <section class="card" id="editor">
-    <h2><?= $editing['id'] ? 'Edit section' : 'New section' ?></h2>
+    <h2><?= th($editing['id'] ? 'admin.content.edit' : 'admin.content.new') ?></h2>
     <?php if ($editing['id'] && count(site_languages()) > 1): $done = section_languages((int)$editing['id']); ?>
-      <nav class="lang-tabs" aria-label="Language of this version">
+      <nav class="lang-tabs" aria-label="<?= th('admin.lang_tabs_label') ?>">
         <?php foreach (site_languages() as $code): $isMain = $code === site_language(); ?>
           <a href="/admin.php?tab=content&amp;section=<?= (int)$editing['id'] ?><?= $isMain ? '' : '&amp;lang=' . h($code) ?>#editor"
              lang="<?= h($code) ?>" <?= $code === $editLang ? 'aria-current="page"' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?><?php
-             if ($isMain): ?> <span class="hint">(main)</span><?php elseif (in_array($code, $done, true)): ?> <span class="tick" aria-label="translated">✓</span><?php endif; ?></a>
+             if ($isMain): ?> <span class="hint"><?= th('admin.main') ?></span><?php elseif (in_array($code, $done, true)): ?> <span class="tick" aria-label="<?= th('admin.translated') ?>">✓</span><?php endif; ?></a>
         <?php endforeach; ?>
       </nav>
       <?php if ($editLang !== site_language()): ?>
-        <p class="hint">Write the <?= h(LANGUAGE_NAMES[$editLang]) ?> version for guests reading <?= h(LANGUAGE_NAMES[$editLang]) ?>.
-          Leave the title or text empty to use the main version for that part; clear both and save to remove this version.</p>
-        <details class="main-version"><summary>Show the main version</summary>
-          <div class="card rich"><h2><?= h($main['title']) ?></h2><?= render_markdown($main['body']) ?></div>
+        <p class="hint"><?= th('admin.content.translation_hint', ['language' => LANGUAGE_NAMES[$editLang]]) ?></p>
+        <details class="main-version"><summary><?= th('admin.content.show_main') ?></summary>
+          <div class="card rich" lang="<?= h(site_language()) ?>" dir="<?= is_rtl(site_language()) ? 'rtl' : 'ltr' ?>"><h2><?= h($main['title']) ?></h2><?= render_markdown($main['body']) ?></div>
         </details>
       <?php endif; ?>
     <?php endif; ?>
     <?php if (input($_GET, 'show_preview') === '1'): ?>
       <div class="section-preview">
-        <p class="hint">Preview (not saved yet)</p>
-        <div class="card rich">
-          <h2><?= h($editing['title'] !== '' ? $editing['title'] : 'Untitled') ?></h2>
+        <p class="hint"><?= th('admin.content.preview_unsaved') ?></p>
+        <div class="card rich" lang="<?= h($editLang) ?>" dir="<?= is_rtl($editLang) ? 'rtl' : 'ltr' ?>">
+          <h2><?= h($editing['title'] !== '' ? $editing['title'] : t('admin.content.untitled')) ?></h2>
           <?= render_markdown($editing['body']) ?>
         </div>
       </div>
@@ -1587,38 +1646,33 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
       <input type="hidden" name="id" value="<?= (int)$editing['id'] ?>">
       <?php $isTranslation = $editing['id'] && $editLang !== site_language(); ?>
       <?php if ($isTranslation): ?><input type="hidden" name="lang" value="<?= h($editLang) ?>"><?php endif; ?>
-      <label>Title<input type="text" name="title" value="<?= h($editing['title']) ?>" lang="<?= h($editLang) ?>" dir="<?= is_rtl($editLang) ? 'rtl' : 'ltr' ?>"
-        placeholder="<?= $isTranslation ? h($main['title']) : 'e.g. Where to stay' ?>" <?= $isTranslation ? '' : 'required' ?>></label>
-      <label for="section-body">Text</label>
-      <div class="md-toolbar" role="toolbar" aria-label="Formatting">
-        <button type="button" data-md="bold" title="Bold"><strong>B</strong></button>
-        <button type="button" data-md="italic" title="Italic"><em>I</em></button>
-        <button type="button" data-md="heading" title="Subheading">Heading</button>
-        <button type="button" data-md="list" title="Bullet list">&bull; List</button>
-        <button type="button" data-md="link" title="Link">Link</button>
-        <select data-md-size aria-label="Text size" title="Text size">
-          <option value="">Text size…</option>
-          <option value="small">Small</option>
-          <option value="large">Large</option>
-          <option value="xlarge">Extra large</option>
+      <label><?= th('admin.field.title') ?><input type="text" name="title" value="<?= h($editing['title']) ?>" lang="<?= h($editLang) ?>" dir="<?= is_rtl($editLang) ? 'rtl' : 'ltr' ?>"
+        placeholder="<?= $isTranslation ? h($main['title']) : th('admin.content.title_placeholder') ?>" <?= $isTranslation ? '' : 'required' ?>></label>
+      <label for="section-body"><?= th('admin.field.text') ?></label>
+      <div class="md-toolbar" role="toolbar" aria-label="<?= th('admin.md.toolbar') ?>">
+        <button type="button" data-md="bold" title="<?= th('admin.md.bold') ?>" aria-label="<?= th('admin.md.bold') ?>"><strong>B</strong></button>
+        <button type="button" data-md="italic" title="<?= th('admin.md.italic') ?>" aria-label="<?= th('admin.md.italic') ?>"><em>I</em></button>
+        <button type="button" data-md="heading" title="<?= th('admin.md.subheading') ?>"><?= th('admin.md.heading') ?></button>
+        <button type="button" data-md="list" title="<?= th('admin.md.bullets') ?>">&bull; <?= th('admin.md.list') ?></button>
+        <button type="button" data-md="link" title="<?= th('admin.md.link') ?>"><?= th('admin.md.link') ?></button>
+        <select data-md-size aria-label="<?= th('admin.md.size') ?>" title="<?= th('admin.md.size') ?>">
+          <option value=""><?= th('admin.md.size_choose') ?></option>
+          <option value="small"><?= th('admin.md.small') ?></option>
+          <option value="large"><?= th('admin.md.large') ?></option>
+          <option value="xlarge"><?= th('admin.md.xlarge') ?></option>
         </select>
       </div>
       <textarea id="section-body" name="body" rows="14" data-md-target lang="<?= h($editLang) ?>" dir="<?= is_rtl($editLang) ? 'rtl' : 'ltr' ?>"><?= h($editing['body']) ?></textarea>
-      <p class="hint">
-        A blank line starts a new paragraph. <code>## </code> at the start of a line makes a subheading,
-        <code>- </code> makes a bullet point, <code>**bold**</code>, <code>*italic*</code>,
-        links look like <code>[Book a room](https://example.com)</code>, and
-        <code>[large]text[/large]</code> changes the size (also <code>small</code> and <code>xlarge</code>).
-      </p>
+      <p class="hint"><?= markdown_hint() ?></p>
       <?php if ($isTranslation): ?>
         <input type="hidden" name="visible" value="<?= $editing['visible'] ? '1' : '0' ?>">
       <?php else: ?>
-      <label class="check"><input type="checkbox" name="visible" value="1" <?= $editing['visible'] ? 'checked' : '' ?>> Show on the guest page</label>
+      <label class="check"><input type="checkbox" name="visible" value="1" <?= $editing['visible'] ? 'checked' : '' ?>> <?= th('admin.content.show_on_page') ?></label>
       <?php endif; ?>
       <div class="actions">
-        <button type="submit" name="action" value="section_save">Save</button>
-        <button type="submit" name="action" value="section_preview" class="secondary">Preview</button>
-        <a class="link" href="/admin.php?tab=content">Cancel</a>
+        <button type="submit" name="action" value="section_save"><?= th('admin.save') ?></button>
+        <button type="submit" name="action" value="section_preview" class="secondary"><?= th('admin.preview') ?></button>
+        <a class="link" href="/admin.php?tab=content"><?= th('admin.cancel') ?></a>
       </div>
     </form>
   </section>
@@ -1626,45 +1680,45 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
   <section class="card">
     <div class="row-between">
-      <h2>Guest page sections</h2>
-      <a class="link" href="/admin.php?tab=content&amp;section=new#editor">+ Blank section</a>
+      <h2><?= th('admin.content.title') ?></h2>
+      <a class="link" href="/admin.php?tab=content&amp;section=new#editor"><?= th('admin.content.add_blank') ?></a>
     </div>
-    <p class="hint">These appear as cards under the RSVP on the guest page, in this order.</p>
+    <p class="hint"><?= th('admin.content.hint') ?></p>
     <?php if (!$sections): ?>
-      <p>No sections yet.</p>
+      <p><?= th('admin.content.none') ?></p>
     <?php else: ?>
     <div class="table-wrap">
       <table class="sections-table">
-        <thead><tr><th>Section</th><th>Status</th><th>Last changed</th><th></th></tr></thead>
+        <thead><tr><th><?= th('admin.content.h_section') ?></th><th><?= th('admin.content.h_status') ?></th><th><?= th('admin.content.h_changed') ?></th><th></th></tr></thead>
         <tbody>
         <?php foreach ($sections as $i => $s): ?>
           <tr <?= $editing && (int)$editing['id'] === (int)$s['id'] ? 'class="editing"' : '' ?>>
-            <td class="name-cell"><strong><?= h($s['title']) ?></strong>
+            <td class="name-cell"><strong lang="<?= h(site_language()) ?>"><?= h($s['title']) ?></strong>
               <?php if (count(site_languages()) > 1): $langs = section_languages((int)$s['id']); $want = count(site_languages()) - 1; ?>
-                <span class="greeted-as"><?= count(array_intersect($langs, site_languages())) ?> of <?= $want ?> translations</span>
+                <span class="greeted-as"><?= th('admin.content.translations', ['done' => count(array_intersect($langs, site_languages())), 'total' => $want]) ?></span>
               <?php endif; ?></td>
-            <td><span class="pill <?= $s['visible'] ? 'yes' : 'waiting' ?>"><?= $s['visible'] ? 'Shown' : 'Hidden' ?></span></td>
-            <td><?= h(date('j M', strtotime($s['updated_at'] . ' UTC'))) ?><?= $s['updated_by'] ? ' by ' . h($s['updated_by']) : '' ?></td>
+            <td><span class="pill <?= $s['visible'] ? 'yes' : 'waiting' ?>"><?= th($s['visible'] ? 'admin.content.shown' : 'admin.content.hidden') ?></span></td>
+            <td><?php $changed = admin_date(strtotime($s['updated_at'] . ' UTC')); ?><?= $s['updated_by'] ? th('admin.content.changed_by', ['date' => $changed, 'name' => $s['updated_by']]) : h($changed) ?></td>
             <td class="row-actions">
-              <a class="link small" href="/admin.php?tab=content&amp;section=<?= (int)$s['id'] ?>#editor">Edit</a>
+              <a class="link small" href="/admin.php?tab=content&amp;section=<?= (int)$s['id'] ?>#editor"><?= th('admin.edit') ?></a>
               <form method="post" class="inline"><?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
-                <button class="link small" name="action" value="section_toggle"><?= $s['visible'] ? 'Hide' : 'Show' ?></button>
+                <button class="link small" name="action" value="section_toggle"><?= th($s['visible'] ? 'admin.content.hide' : 'admin.content.show') ?></button>
               </form>
               <form method="post" class="inline"><?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
                 <input type="hidden" name="dir" value="up">
-                <button class="link small" name="action" value="section_move" <?= $i === 0 ? 'disabled' : '' ?> aria-label="Move <?= h($s['title']) ?> up">&uarr;</button>
+                <button class="link small" name="action" value="section_move" <?= $i === 0 ? 'disabled' : '' ?> aria-label="<?= th('admin.content.move_up', ['title' => $s['title']]) ?>">&uarr;</button>
               </form>
               <form method="post" class="inline"><?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
                 <input type="hidden" name="dir" value="down">
-                <button class="link small" name="action" value="section_move" <?= $i === count($sections) - 1 ? 'disabled' : '' ?> aria-label="Move <?= h($s['title']) ?> down">&darr;</button>
+                <button class="link small" name="action" value="section_move" <?= $i === count($sections) - 1 ? 'disabled' : '' ?> aria-label="<?= th('admin.content.move_down', ['title' => $s['title']]) ?>">&darr;</button>
               </form>
-              <form method="post" class="inline" data-confirm="Delete &quot;<?= h($s['title']) ?>&quot;? This can't be undone.">
+              <form method="post" class="inline" data-confirm="<?= th('admin.content.confirm_delete', ['title' => $s['title']]) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
-                <button class="link small danger" name="action" value="section_delete">Delete</button>
+                <button class="link small danger" name="action" value="section_delete"><?= th('admin.delete') ?></button>
               </form>
             </td>
           </tr>
@@ -1673,7 +1727,7 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
       </table>
     </div>
     <?php endif; ?>
-    <p class="add-section">Add a section:
+    <p class="add-section"><?= th('admin.content.add') ?>
       <?php foreach ($templates as $key => $t): if ($key === 'blank') continue; ?>
         <a class="chip-link" href="/admin.php?tab=content&amp;new=<?= $key ?>#editor"><?= h($t['label']) ?></a>
       <?php endforeach; ?>
@@ -1688,43 +1742,42 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
   <?php if ($link): ?>
   <section class="card setup-link">
-    <h2>Setup link for <?= h($link['name']) ?></h2>
+    <h2><?= th('admin.people.link_for', ['name' => $link['name']]) ?></h2>
     <?php if (!empty($link['emailed'])): ?>
-      <p>Emailed to <?= h($link['emailed']) ?>. Here it is too, in case it doesn't arrive.
-         It works once and expires in <?= SETUP_LINK_DAYS ?> days, and isn't shown again.</p>
+      <p><?= th('admin.people.link_emailed', ['email' => $link['emailed'], 'count' => SETUP_LINK_DAYS]) ?></p>
     <?php else: ?>
-      <p>Send this to <?= h($link['name']) ?>. They open it, choose their own password, and are signed in.
-         It works once and expires in <?= SETUP_LINK_DAYS ?> days. It isn't shown again, so copy it now.</p>
+      <p><?= th('admin.people.link_send', ['name' => $link['name'], 'count' => SETUP_LINK_DAYS]) ?></p>
     <?php endif; ?>
-    <p><code class="link-box"><?= h($link['url']) ?></code>
-       <button type="button" class="secondary" data-copy="<?= h($link['url']) ?>">Copy link</button></p>
+    <p><code class="link-box" dir="ltr"><?= h($link['url']) ?></code>
+       <button type="button" class="secondary" data-copy="<?= h($link['url']) ?>"><?= th('admin.copy_link') ?></button></p>
   </section>
   <?php endif; ?>
 
   <section class="card">
-    <h2>People who can sign in</h2>
+    <h2><?= th('admin.people.title') ?></h2>
     <?php $editUser = find_user((int)input($_GET, 'edit_user')); if ($editUser): ?>
       <form method="post" class="edit-guest" id="edit-user">
         <?= csrf_field() ?>
         <input type="hidden" name="id" value="<?= (int)$editUser['id'] ?>">
-        <p class="edit-title">Editing <?= h($editUser['name']) ?> <span class="hint">(username <?= h($editUser['username']) ?> stays the same)</span></p>
-        <label>Name<input type="text" name="name" value="<?= h($editUser['name']) ?>" required></label>
-        <label>Email<input type="email" name="email" value="<?= h($editUser['email']) ?>" placeholder="For sign-in links"></label>
-        <button type="submit" name="action" value="user_update">Save</button>
-        <a class="link" href="/admin.php?tab=people">Cancel</a>
+        <p class="edit-title"><?= th('admin.edit.title', ['name' => $editUser['name']]) ?> <span class="hint"><?= th('admin.people.username_same', ['username' => $editUser['username']]) ?></span></p>
+        <label><?= th('admin.field.name') ?><input type="text" name="name" value="<?= h($editUser['name']) ?>" required></label>
+        <label><?= th('admin.field.email') ?><input type="email" name="email" value="<?= h($editUser['email']) ?>" placeholder="<?= th('admin.people.email_placeholder') ?>" dir="ltr"></label>
+        <button type="submit" name="action" value="user_update"><?= th('admin.save') ?></button>
+        <a class="link" href="/admin.php?tab=people"><?= th('admin.cancel') ?></a>
       </form>
     <?php endif; ?>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Status</th><th>Last signed in</th><th>Feedback emails</th><th></th></tr></thead>
+        <thead><tr><th><?= th('admin.field.name') ?></th><th><?= th('admin.people.h_username') ?></th><th><?= th('admin.field.email') ?></th>
+          <th><?= th('admin.people.h_status') ?></th><th><?= th('admin.people.h_last') ?></th><th><?= th('admin.people.h_feedback') ?></th><th></th></tr></thead>
         <tbody>
           <tr>
             <?php $ownerContact = admin_contact(0); ?>
-            <td>You (owner)</td><td><code><?= OWNER_USERNAME ?></code></td>
-            <td class="email-cell"><?= $ownerContact['email'] !== '' ? h($ownerContact['email']) : '—' ?></td>
-            <td><span class="pill yes">Active</span></td><td>—</td>
-            <td><?= feedback_toggle(0, 'yourself', $ownerContact) ?></td>
-            <td class="hint">Password set in config.php</td>
+            <td><?= th('admin.people.you_owner') ?></td><td><code><?= OWNER_USERNAME ?></code></td>
+            <td class="email-cell" dir="ltr"><?= $ownerContact['email'] !== '' ? h($ownerContact['email']) : '—' ?></td>
+            <td><span class="pill yes"><?= th('admin.people.active') ?></span></td><td>—</td>
+            <td><?= feedback_toggle(0, '', $ownerContact) ?></td>
+            <td class="hint"><?= th('admin.people.owner_password') ?></td>
           </tr>
           <?php foreach ($users as $u):
               $pending = !$u['password_hash'];
@@ -1732,26 +1785,26 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
           <tr>
             <td><?= h($u['name']) ?></td>
             <td><code><?= h($u['username']) ?></code></td>
-            <td class="email-cell"><?= $u['email'] ? h($u['email']) : '—' ?></td>
-            <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= $pending ? ($expired ? 'Link expired' : 'Waiting for setup') : 'Active' ?></span>
-              <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= $keys ?> passkey<?= $keys === 1 ? '' : 's' ?></span><?php endif; ?></td>
-            <td><?= $u['last_login'] ? h(date('j M, H:i', strtotime($u['last_login'] . ' UTC'))) : '—' ?></td>
+            <td class="email-cell" dir="ltr"><?= $u['email'] ? h($u['email']) : '—' ?></td>
+            <td><span class="pill <?= $pending ? 'waiting' : 'yes' ?>"><?= th($pending ? ($expired ? 'admin.people.expired' : 'admin.people.waiting') : 'admin.people.active') ?></span>
+              <?php $keys = count(user_passkeys((int)$u['id'])); if ($keys): ?><span class="who"><?= th('admin.passkey.count', ['count' => $keys]) ?></span><?php endif; ?></td>
+            <td><?= $u['last_login'] ? h(admin_date(strtotime($u['last_login'] . ' UTC'), 'time')) : '—' ?></td>
             <td><?= feedback_toggle((int)$u['id'], $u['name'], admin_contact((int)$u['id'])) ?></td>
             <td class="row-actions">
-              <a class="link small" href="/admin.php?tab=people&amp;edit_user=<?= (int)$u['id'] ?>#edit-user">Edit</a>
+              <a class="link small" href="/admin.php?tab=people&amp;edit_user=<?= (int)$u['id'] ?>#edit-user"><?= th('admin.edit') ?></a>
               <?php if (valid_email($u['email'])): ?>
-              <form method="post" class="inline" data-confirm="Email <?= h($u['name']) ?> a new link at <?= h($u['email']) ?>?<?= $pending ? '' : ' Their current password will stop working.' ?>">
+              <form method="post" class="inline" data-confirm="<?= th($pending ? 'admin.people.confirm_email' : 'admin.people.confirm_email_reset', ['name' => $u['name'], 'email' => $u['email']]) ?>">
                 <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$u['id'] ?>"><input type="hidden" name="send_email" value="1">
-                <button class="link small" name="action" value="user_reset">Email <?= $pending ? 'setup' : 'reset' ?> link</button>
+                <button class="link small" name="action" value="user_reset"><?= th($pending ? 'admin.people.email_setup' : 'admin.people.email_reset') ?></button>
               </form>
               <?php endif; ?>
-              <form method="post" class="inline" data-confirm="Create a new setup link for <?= h($u['name']) ?>? Their current password<?= user_passkeys((int)$u['id']) ? ' and passkeys' : '' ?> will stop working.">
+              <form method="post" class="inline" data-confirm="<?= th(user_passkeys((int)$u['id']) ? 'admin.people.confirm_new_link_passkeys' : 'admin.people.confirm_new_link', ['name' => $u['name']]) ?>">
                 <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                <button class="link small" name="action" value="user_reset"><?= $pending ? 'New setup link' : 'Reset password' ?></button>
+                <button class="link small" name="action" value="user_reset"><?= th($pending ? 'admin.people.new_link' : 'admin.people.reset') ?></button>
               </form>
-              <form method="post" class="inline" data-confirm="Remove <?= h($u['name']) ?>? They won't be able to sign in.">
+              <form method="post" class="inline" data-confirm="<?= th('admin.people.confirm_remove', ['name' => $u['name']]) ?>">
                 <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                <button class="link small danger" name="action" value="user_remove">Remove</button>
+                <button class="link small danger" name="action" value="user_remove"><?= th('admin.remove') ?></button>
               </form>
             </td>
           </tr>
@@ -1762,67 +1815,80 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
   </section>
 
   <section class="card">
-    <h2>Add a person</h2>
+    <h2><?= th('admin.people.add_title') ?></h2>
     <form method="post" class="email-form">
       <?= csrf_field() ?>
       <div class="field-row">
-        <label>Name<input type="text" name="name" placeholder="Sam" required></label>
-        <label>Username<input type="text" name="username" placeholder="sam" autocapitalize="none" spellcheck="false" required></label>
-        <label>Email<input type="email" name="email" placeholder="sam@example.com"></label>
+        <label><?= th('admin.field.name') ?><input type="text" name="name" placeholder="Sam" required></label>
+        <label><?= th('admin.login.username') ?><input type="text" name="username" placeholder="sam" autocapitalize="none" spellcheck="false" dir="ltr" required></label>
+        <label><?= th('admin.field.email') ?><input type="email" name="email" placeholder="sam@example.com" dir="ltr"></label>
       </div>
-      <label class="check"><input type="checkbox" name="send_email" value="1" checked> Email them the setup link</label>
-      <p class="hint">They can do everything in admin except manage logins. With an email address they can also reset their own password from the sign-in page.</p>
-      <button type="submit" name="action" value="user_add">Add person</button>
+      <label class="check"><input type="checkbox" name="send_email" value="1" checked> <?= th('admin.people.email_them') ?></label>
+      <p class="hint"><?= th('admin.people.add_hint') ?></p>
+      <button type="submit" name="action" value="user_add"><?= th('admin.people.add') ?></button>
     </form>
   </section>
 
 <?php elseif ($tab === 'account'): $mine = user_passkeys((int)$me['id']); $origin = passkey_origin(); ?>
 
-  <h2 class="page-title">Your account</h2>
+  <h2 class="page-title"><?= th('admin.tab.account') ?></h2>
   <?php $contact = admin_contact((int)$me['id']); ?>
   <section class="card">
-    <h2>Email and notifications</h2>
+    <h2><?= th('admin.account.email_title') ?></h2>
     <form method="post" class="email-form account-contact">
       <?= csrf_field() ?>
-      <label>Your email address<input type="email" name="email" value="<?= h($contact['email']) ?>" placeholder="you@example.com" autocomplete="email"></label>
+      <label><?= th('admin.account.your_email') ?><input type="email" name="email" value="<?= h($contact['email']) ?>" placeholder="you@example.com" autocomplete="email" dir="ltr"></label>
       <?php if ($me['id']): ?>
-        <label>Current password <span class="hint-inline">(only needed to change your email address)</span>
+        <label><?= th('admin.account.current_password') ?> <span class="hint-inline"><?= th('admin.account.current_password_hint') ?></span>
           <input type="password" name="current_password" autocomplete="current-password"></label>
-        <p class="hint">Also used if you ever need to reset your password.</p>
+        <p class="hint"><?= th('admin.account.also_reset') ?></p>
       <?php else: ?>
-        <p class="hint">Only used for the emails below. Your password is set in config.php.</p>
+        <p class="hint"><?= th('admin.account.owner_hint') ?></p>
       <?php endif; ?>
       <label class="check"><input type="checkbox" name="notify_feedback" value="1" <?= $contact['notify'] ? 'checked' : '' ?>>
-        Email me when a guest sends a message</label>
-      <p class="hint">You'll get their name and message, with a link to the Feedback tab. If their invitation has an email
-        address, replying to the email goes straight to them.</p>
-      <button type="submit" name="action" value="account_contact">Save</button>
+        <?= th('admin.account.notify') ?></label>
+      <p class="hint"><?= th('admin.account.notify_hint') ?></p>
+      <button type="submit" name="action" value="account_contact"><?= th('admin.save') ?></button>
     </form>
   </section>
 
   <section class="card">
-    <h2>Passkeys</h2>
-    <p class="hint">A passkey lets you sign in with Face ID, a fingerprint or your device's PIN instead of typing your
-      password, and it can't be stolen by a fake site. Once you've added one, <strong>you'll need it every time you sign in</strong>:
-      on its own, or after your password. Add one on each device you use, or use a password manager that syncs them.</p>
+    <h2><?= th('admin.account.language_title') ?></h2>
+    <form method="post" class="email-form">
+      <?= csrf_field() ?>
+      <?php $myChoice = admin_language_choice((int)$me['id']); ?>
+      <label><?= th('admin.account.language_label') ?>
+        <select name="language" aria-describedby="admin-language-hint">
+          <option value=""><?= th('admin.account.language_browser', ['language' => LANGUAGE_NAMES[visitor_language()]]) ?></option>
+          <?php foreach (array_keys(LANGUAGE_NAMES) as $code): ?>
+            <option value="<?= h($code) ?>" lang="<?= h($code) ?>" <?= $myChoice === $code ? 'selected' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?></option>
+          <?php endforeach; ?>
+        </select></label>
+      <p class="hint" id="admin-language-hint"><?= th('admin.account.language_hint') ?></p>
+      <button type="submit" name="action" value="account_language"><?= th('admin.save') ?></button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2><?= th('admin.passkey.title') ?></h2>
+    <p class="hint"><?= t_html('admin.passkey.hint', ['every_time' => '<strong>' . th('admin.passkey.every_time') . '</strong>']) ?></p>
     <?php if (is_owner() && PASSKEY_RECOVERY): ?>
-      <p class="notice" role="status">PASSKEY_RECOVERY is on in config.php, so the owner can sign in with just the password.
-        Once you've added a new passkey, set it back to <code>false</code>.</p>
+      <p class="notice" role="status"><?= t_html('admin.passkey.recovery_on', ['false' => '<code>false</code>']) ?></p>
     <?php endif; ?>
     <?php if ($mine): ?>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Passkey</th><th>Added</th><th>Last used</th><th></th></tr></thead>
+          <thead><tr><th><?= th('admin.passkey.h_name') ?></th><th><?= th('admin.passkey.h_added') ?></th><th><?= th('admin.passkey.h_used') ?></th><th></th></tr></thead>
           <tbody>
           <?php foreach ($mine as $p): ?>
             <tr>
               <td><?= h($p['name']) ?></td>
-              <td><?= h(date('j M Y', strtotime($p['created_at'] . ' UTC'))) ?></td>
-              <td><?= $p['last_used_at'] ? h(date('j M, H:i', strtotime($p['last_used_at'] . ' UTC'))) : '—' ?></td>
+              <td><?= h(admin_date(strtotime($p['created_at'] . ' UTC'), 'year')) ?></td>
+              <td><?= $p['last_used_at'] ? h(admin_date(strtotime($p['last_used_at'] . ' UTC'), 'time')) : '—' ?></td>
               <td>
-                <form method="post" class="inline" data-confirm="Remove the passkey &quot;<?= h($p['name']) ?>&quot;?<?= count($mine) === 1 ? ' It\'s your only one, so you\'ll be able to sign in with just your password again.' : '' ?>">
+                <form method="post" class="inline" data-confirm="<?= th(count($mine) === 1 ? 'admin.passkey.confirm_remove_last' : 'admin.passkey.confirm_remove', ['name' => $p['name']]) ?>">
                   <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                  <button class="link small danger" name="action" value="passkey_remove">Remove</button>
+                  <button class="link small danger" name="action" value="passkey_remove"><?= th('admin.remove') ?></button>
                 </form>
               </td>
             </tr>
@@ -1831,20 +1897,20 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         </table>
       </div>
     <?php else: ?>
-      <p>You don't have a passkey yet, so you sign in with your password only.</p>
+      <p><?= th('admin.passkey.none') ?></p>
     <?php endif; ?>
 
     <?php if (!$origin): ?>
-      <p class="hint">Passkeys can only be added on the live site, <?= h(SITE_URL) ?>.</p>
+      <p class="hint"><?= th('admin.passkey.live_only', ['url' => SITE_URL]) ?></p>
     <?php else: ?>
       <form method="post" class="passkey-add">
         <?= csrf_field() ?>
-        <label for="passkey-name">Name it, so you can tell your passkeys apart</label>
+        <label for="passkey-name"><?= th('admin.passkey.name_label') ?></label>
         <div class="csv-row">
-          <input id="passkey-name" name="passkey_name" type="text" maxlength="60" value="<?= $mine ? '' : 'My phone' ?>" placeholder="e.g. Work laptop">
-          <button type="button" data-passkey="register" hidden>Add a passkey</button>
+          <input id="passkey-name" name="passkey_name" type="text" maxlength="60" value="<?= $mine ? '' : th('admin.passkey.my_phone') ?>" placeholder="<?= th('admin.passkey.name_placeholder') ?>">
+          <button type="button" data-passkey="register" hidden><?= th('admin.passkey.add') ?></button>
         </div>
-        <p class="error" data-passkey-unsupported hidden>This browser can't create passkeys. Try Safari, Chrome, Edge or Firefox on an up-to-date device.</p>
+        <p class="error" data-passkey-unsupported hidden><?= th('admin.passkey.unsupported_create') ?></p>
         <p class="error" role="alert" data-passkey-message hidden></p>
       </form>
     <?php endif; ?>
@@ -1852,6 +1918,11 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
 
 <?php endif; ?>
 </main>
+<?= js_phrases(['admin.copied', 'admin.copy_link', 'admin.bulk.hint', 'admin.bulk.js_selected', 'admin.bulk.js_too_many',
+    'admin.bulk.js_confirm_delete', 'admin.bulk.send', 'admin.bulk.resend', 'admin.bulk.send_resend', 'admin.bulk.js_confirm_send',
+    'admin.bulk.js_again_one', 'admin.bulk.js_again_all', 'admin.bulk.js_again_some', 'admin.bulk.js_skipped',
+    'admin.md.js_bold', 'admin.md.js_italic', 'admin.md.js_link',
+    'admin.js.reload', 'admin.js.exists', 'admin.js.not_added', 'admin.js.cancelled', 'admin.js.wrong']) ?>
 <?php if ($tab === 'account'): ?><script src="<?= h(asset_url('/assets/passkey.js')) ?>"></script><?php endif; ?>
 <script src="<?= h(asset_url('/assets/admin.js')) ?>"></script>
 <?php page_footer();

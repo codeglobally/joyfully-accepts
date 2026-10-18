@@ -6,6 +6,10 @@
   var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-passkey]'));
   if (!buttons.length) return;
   var supported = !!(window.PublicKeyCredential && navigator.credentials && window.fetch);
+  // Messages in the page's language (see js_phrases() in private/i18n.php).
+  var phrases = {};
+  try { phrases = JSON.parse(document.getElementById('phrases').dataset.phrases); } catch (e) {}
+  function phrase(key) { return phrases[key] || key; }
   document.querySelectorAll('[data-passkey-unsupported]').forEach(function (el) { el.hidden = supported; });
   if (!supported) return;
 
@@ -47,7 +51,7 @@
       fetch('/admin.php?passkey_options=1', { method: 'POST', body: body, credentials: 'same-origin' })
         .then(function (response) {
           return response.json().then(function (options) {
-            if (!response.ok) throw new Error(options.error || 'Please reload the page and try again.');
+            if (!response.ok) throw new Error(options.error || phrase('admin.js.reload'));
             return options;
           });
         })
@@ -77,11 +81,11 @@
         .catch(function (error) {
           button.disabled = false;
           if (error && error.name === 'InvalidStateError') {
-            say('That device already has a passkey for this site.');
+            say(phrase('admin.js.exists'));
           } else if (error && error.name === 'NotAllowedError') {
-            say(purpose === 'register' ? 'No passkey was added. You can try again.' : 'Cancelled, or no passkey was found on this device. You can try again.');
+            say(phrase(purpose === 'register' ? 'admin.js.not_added' : 'admin.js.cancelled'));
           } else {
-            say(error && error.message ? error.message : 'Something went wrong. Please try again.');
+            say(error && error.message ? error.message : phrase('admin.js.wrong'));
           }
         });
     });

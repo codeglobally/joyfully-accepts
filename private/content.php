@@ -41,10 +41,11 @@ function seed_sections(PDO $pdo): void
     }
     $map = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(WEDDING_PLACE);
     $insert = $pdo->prepare('INSERT INTO sections (title, body, visible, position) VALUES (?, ?, ?, ?)');
-    $insert->execute(['The day',
-        "**" . WEDDING_DATE . "**\n\n" . WEDDING_PLACE . "\n[Open in Maps]($map)\n\n"
-        . "Add the timings for the day here, e.g. ceremony at 3pm, followed by drinks, dinner and dancing.", 1, 1]);
-    $insert->execute(['Where to stay', section_templates()['hotels']['body'], 0, 2]);
+    [$dayTitle, $dayBody] = in_language(site_language(), fn() => [t('admin.stpl.day.title'),
+        t('admin.stpl.day.body', ['date' => WEDDING_DATE, 'place' => WEDDING_PLACE, 'map' => $map])]);
+    $insert->execute([$dayTitle, $dayBody, 1, 1]);
+    $hotels = section_templates()['hotels'];
+    $insert->execute([$hotels['title'], $hotels['body'], 0, 2]);
     $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_seeded', '1')");
 }
 
@@ -110,24 +111,14 @@ function localise_sections(array $sections, string $language): array
 // Starting points offered by "Add a section".
 function section_templates(): array
 {
-    return [
-        'hotels' => ['label' => 'Where to stay', 'title' => 'Where to stay', 'body' =>
-            "We've found a few places to stay nearby.\n\n"
-            . "## Hotel name\n10 minutes from the venue. Mention our wedding for the group rate.\n[Book a room](https://example.com)\n\n"
-            . "## Another place\nA short description.\n[Website](https://example.com)"],
-        'things' => ['label' => 'Things to do', 'title' => 'Things to do', 'body' =>
-            "Making a weekend of it? Some of our favourite things nearby:\n\n"
-            . "- **A beach or walk** - why you'll love it\n- **A pub or restaurant** - what to order\n- **A day out** - good for families"],
-        'travel' => ['label' => 'Getting there', 'title' => 'Getting there', 'body' =>
-            "## By car\nThere's parking at the venue.\n\n"
-            . "## By train\nThe nearest station is ... We'll arrange taxis from there.\n\n"
-            . "## Taxis\nLocal firms: ..."],
-        'gifts' => ['label' => 'Gifts', 'title' => 'Gifts', 'body' =>
-            "Having you there is the best gift. If you'd like to give something, ..."],
-        'faq' => ['label' => 'FAQs', 'title' => 'Questions', 'body' =>
-            "## Is there a dress code?\n...\n\n## Can I bring children?\n...\n\n## When should I reply by?\n..."],
-        'blank' => ['label' => 'Blank section', 'title' => '', 'body' => ''],
-    ];
+    // Labels in the admin's language; the starting text in the site's, as it
+    // becomes the section's main version.
+    $out = [];
+    foreach (['hotels', 'things', 'travel', 'gifts', 'faq', 'blank'] as $key) {
+        $out[$key] = ['label' => t("admin.stpl.$key.label")] + ($key === 'blank' ? ['title' => '', 'body' => ''] : in_language(site_language(),
+            fn() => ['title' => t("admin.stpl.$key.title"), 'body' => t("admin.stpl.$key.body")]));
+    }
+    return $out;
 }
 
 // Markdown subset, safe by construction: everything is HTML-escaped first,

@@ -126,13 +126,11 @@ function find_template(int $id): ?array
 // address, are always left out.
 function audiences(): array
 {
-    return [
-        'all' => 'Everyone',
-        'coming' => 'Coming',
-        'coming_or_maybe' => 'Coming or not sure yet',
-        'no_reply' => 'Not replied yet',
-        'maybe' => 'Not sure yet',
-    ];
+    $out = [];
+    foreach (['all', 'coming', 'coming_or_maybe', 'no_reply', 'maybe'] as $key) {
+        $out[$key] = t('admin.aud.' . $key);
+    }
+    return $out;
 }
 
 function audience_guests(string $audience): array

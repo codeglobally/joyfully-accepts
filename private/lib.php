@@ -508,12 +508,14 @@ function parse_guest_csv(string $csv): array
     $rows = [];
     $nameCol = 0;
     $emailCols = null;   // null = no headings: any other cell with an @
+    $languageCol = null;
     $line = 0;
     while (($cells = fgetcsv($in, 0, (string)$delimiter, '"', '')) !== false) {
         $cells = array_map(fn($c) => trim((string)$c), $cells);
         $heading = '/^(full |guest |first |party )?(names?|guests?|invit\w*|e-?mails?( address(es)?)?)( ?\d+)?$/i';
         if ($line++ === 0 && !preg_grep('/@/', $cells) && preg_grep($heading, $cells)) {
             $emailCols = array_keys(preg_grep('/mail/i', $cells));
+            $languageCol = array_keys(preg_grep('/^(lang(uage)?|idioma|sprache|langue|اللغة|语言|語言)$/iu', $cells))[0] ?? null;
             $named = array_keys(array_diff_key(preg_grep('/name|guest|invit/i', $cells), array_flip($emailCols)));
             $nameCol = $named ? $named[0] : 0;
             continue;
@@ -531,14 +533,14 @@ function parse_guest_csv(string $csv): array
             $emails = clean_emails(implode(',', $emails));
         }
         if ($name !== '') {
-            $rows[] = [$name, $emails];
+            $rows[] = $languageCol !== null ? [$name, $emails, language_from_text($cells[$languageCol] ?? '')] : [$name, $emails];
         }
     }
     fclose($in);
     return $rows;
 }
 
-// Adds invitations from [[name, emails], …], each with its own code.
+// Adds invitations from [[name, emails, language or null], …], each with its own code.
 // $skipExisting leaves out names already on the list (so uploading the same
 // file twice doesn't double up). Returns [added, names with a bad address,
 // names skipped].
@@ -552,11 +554,13 @@ function add_guests(array $rows, bool $skipExisting = false): array
             $existing[$key($g['name'])] = true;
         }
     }
-    $insert = db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, ?)');
+    $insert = db()->prepare('INSERT INTO guests (code, name, email, language, language_set_by) VALUES (?, ?, ?, ?, ?)');
     $added = 0;
     $bad = [];
     $skipped = [];
-    foreach ($rows as [$name, $emails]) {
+    foreach ($rows as $row) {
+        [$name, $emails] = $row;
+        $language = valid_language($row[2] ?? null) ? $row[2] : null;
         if (isset($existing[$key($name)])) {
             $skipped[] = $name;
             continue;
@@ -564,7 +568,7 @@ function add_guests(array $rows, bool $skipExisting = false): array
         if (has_bad_email($emails)) {
             $bad[] = $name;
         }
-        $insert->execute([generate_code(), $name, $emails !== '' ? $emails : null]);
+        $insert->execute([generate_code(), $name, $emails !== '' ? $emails : null, $language, $language ? 'admin' : null]);
         if ($skipExisting) {
             $existing[$key($name)] = true;   // and a repeat within the same file
         }
@@ -642,15 +646,15 @@ function dietary_donut_svg(array $segments, int $peopleWith, int $peopleComing):
         $arcs .= '<circle class="seg" data-seg="' . $i . '" cx="90" cy="90" r="' . $r . '" fill="none" stroke="' . $colour . '" '
             . 'stroke-width="26" stroke-dasharray="' . round(max($len - $gap, 0.5), 2) . ' ' . round($circ, 2) . '" '
             . 'stroke-dashoffset="' . round(-$offset, 2) . '" transform="rotate(-90 90 90)">'
-            . '<title>' . h($label) . ': ' . $count . ' (' . $pct . '%)</title></circle>';
+            . '<title>' . h(($label === 'Other' ? t('admin.diet.other') : diet_label($label)) . ': ' . $count . ' (' . $pct . '%)') . '</title></circle>';
         $offset += $len;
         $i++;
     }
     return '<svg class="donut" viewBox="0 0 180 180" width="180" height="180" role="img" '
-        . 'aria-label="Mix of dietary requirements; details in the table beside it">'
+        . 'aria-label="' . th('admin.diet.chart_label') . '">'
         . $arcs
         . '<text x="90" y="88" text-anchor="middle" class="donut-number">' . $peopleWith . '</text>'
-        . '<text x="90" y="110" text-anchor="middle" class="donut-caption">of ' . $peopleComing . ' coming</text>'
+        . '<text x="90" y="110" text-anchor="middle" class="donut-caption">' . th('admin.diet.of_coming', ['count' => $peopleComing]) . '</text>'
         . '</svg>';
 }
 

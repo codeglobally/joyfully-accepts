@@ -161,4 +161,12 @@ return [
     'admin_mail.username' => "Votre nom d’utilisateur est {username}.",
     'admin_mail.expires' => ['one' => "Le lien ne fonctionne qu’une fois et expire dans {count} jour.", 'other' => "Le lien ne fonctionne qu’une fois et expire dans {count} jours."],
     'admin_mail.ignore' => "Si vous n’êtes pas à l’origine de cette demande, vous pouvez ignorer cet e-mail.",
+
+    // Short dates in admin tables.
+    'date.months_short' => ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+    'date.weekdays_short' => ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'],
+    'date.day_month' => '{day} {month}',
+    'date.day_month_year' => '{day} {month} {year}',
+    'date.with_time' => '{date} à {time}',
+    'date.with_weekday' => '{weekday} {date}',
 ];

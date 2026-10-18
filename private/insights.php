@@ -5,14 +5,15 @@
 // The RSVP funnel: invited -> emailed -> visited -> replied.
 function rsvp_funnel(array $guests): array
 {
-    $steps = ['Invitations' => count($guests), 'Emailed' => 0, 'Visited the site' => 0, 'Replied' => 0];
+    // Keys are phrase names: admin.funnel.invitations and so on.
+    $steps = ['invitations' => count($guests), 'emailed' => 0, 'visited' => 0, 'replied' => 0];
     $split = ['yes' => 0, 'no' => 0, 'maybe' => 0];
     foreach ($guests as $g) {
-        $steps['Emailed'] += $g['invited_at'] ? 1 : 0;
-        $steps['Visited the site'] += $g['first_visit_at'] ? 1 : 0;
+        $steps['emailed'] += $g['invited_at'] ? 1 : 0;
+        $steps['visited'] += $g['first_visit_at'] ? 1 : 0;
         $status = rsvp_status($g);
         if ($status !== 'waiting') {
-            $steps['Replied']++;
+            $steps['replied']++;
             $split[$status]++;
         }
     }
@@ -78,7 +79,7 @@ function catering_rows(array $guests): array
                 continue;
             }
             $person = $entry['name'] === 'Your party'
-                ? $g['name'] . ($who['known'] ? ' (party of ' . $who['count'] . ')' : '')
+                ? ($who['known'] ? t('admin.ins.party_of', ['name' => $g['name'], 'count' => $who['count']]) : $g['name'])
                 : $entry['name'];
             $rows[] = [
                 'person' => $person,
@@ -104,11 +105,11 @@ function reply_timeline(array $guests): array
         }
         if ($g['invited_at']) {
             $day = substr($g['invited_at'], 0, 10);
-            $sends[$day]['Invitations'] = ($sends[$day]['Invitations'] ?? 0) + 1;
+            $sends[$day]['invitations'] = ($sends[$day]['invitations'] ?? 0) + 1;
         }
     }
     foreach (db()->query("SELECT sent_at, subject, sent FROM notifications WHERE sent > 0")->fetchAll() as $n) {
-        $sends[substr($n['sent_at'], 0, 10)]['Update: ' . $n['subject']] = (int)$n['sent'];
+        $sends[substr($n['sent_at'], 0, 10)]['update: ' . $n['subject']] = (int)$n['sent'];
     }
     $days = array_keys($replies + $sends);
     if (!$days) {
@@ -142,7 +143,7 @@ function reply_timeline_svg(array $timeline, int $invitations): string
     $keys = array_keys($days);
 
     $svg = '<svg class="timeline" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
-        . 'aria-label="Total replies over time; the daily figures are in the table below">';
+        . 'aria-label="' . th('admin.ins.chart_label') . '">';
     // Recessive grid: 0, half and the number of invitations.
     foreach ([0, (int)round($max / 2), $max] as $tick) {
         $svg .= '<line class="grid" x1="' . $left . '" x2="' . ($w - $right) . '" y1="' . $y($tick) . '" y2="' . $y($tick) . '"/>'
@@ -154,9 +155,8 @@ function reply_timeline_svg(array $timeline, int $invitations): string
         if ($i === false) {
             continue;
         }
-        $label = implode(', ', array_map(fn($k, $v) => "$k ($v)", array_keys($what), $what));
         $svg .= '<line class="send" x1="' . $x($i) . '" x2="' . $x($i) . '" y1="' . $top . '" y2="' . ($top + $plotH) . '">'
-            . '<title>' . h(date('j M', strtotime($day)) . ': ' . $label) . '</title></line>';
+            . '<title>' . h(admin_date(strtotime($day)) . ': ' . sends_text($what)) . '</title></line>';
     }
     // The line.
     $points = [];
@@ -169,13 +169,13 @@ function reply_timeline_svg(array $timeline, int $invitations): string
     // Hover bands with tooltips.
     $band = $n > 1 ? $plotW / ($n - 1) : $plotW;
     foreach ($keys as $i => $day) {
-        $tip = date('j M', strtotime($day)) . ': ' . $days[$day]['total'] . ' replied'
-            . ($days[$day]['new'] ? ' (+' . $days[$day]['new'] . ' that day)' : '');
+        $tip = t('admin.ins.tip_replied', ['date' => admin_date(strtotime($day)), 'count' => number_text($days[$day]['total'])])
+            . ($days[$day]['new'] ? ' ' . t('admin.ins.tip_new', ['count' => number_text($days[$day]['new'])]) : '');
         $svg .= '<rect class="hover" x="' . round($x($i) - $band / 2, 1) . '" y="' . $top . '" width="' . round($band, 1)
             . '" height="' . $plotH . '"><title>' . h($tip) . '</title></rect>';
     }
     // First and last dates on the x axis.
-    $svg .= '<text class="axis" x="' . $left . '" y="' . ($h - 8) . '">' . h(date('j M', strtotime($keys[0]))) . '</text>'
-        . '<text class="axis" x="' . ($w - $right) . '" y="' . ($h - 8) . '" text-anchor="end">' . h(date('j M', strtotime($last))) . '</text>';
+    $svg .= '<text class="axis" x="' . $left . '" y="' . ($h - 8) . '">' . h(admin_date(strtotime($keys[0]))) . '</text>'
+        . '<text class="axis" x="' . ($w - $right) . '" y="' . ($h - 8) . '" text-anchor="end">' . h(admin_date(strtotime($last))) . '</text>';
     return $svg . '</svg>';
 }
