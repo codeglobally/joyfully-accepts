@@ -25,7 +25,7 @@ const APP_DIR = __DIR__;
 // Semantic version, MAJOR.MINOR.PATCH, bumped with every change (see
 // CHANGELOG.md): MAJOR when site owners must do something to upgrade, MINOR
 // for anything new, PATCH for fixes and small tweaks. Shown in the footer.
-const SITE_VERSION = '2.5.0';
+const SITE_VERSION = '2.7.4';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';
@@ -124,6 +124,10 @@ function db(): PDO
     if (!in_array('notify', $columns, true)) {
         $pdo->exec('ALTER TABLE guests ADD COLUMN notify INTEGER NOT NULL DEFAULT 1');   // 0 = opted out of updates
     }
+    if (!in_array('language', $columns, true)) {
+        $pdo->exec('ALTER TABLE guests ADD COLUMN language TEXT');          // e.g. 'es'; NULL until their first visit
+        $pdo->exec('ALTER TABLE guests ADD COLUMN language_set_by TEXT');   // 'browser', 'guest' or 'admin'
+    }
     if (!in_array('greeting', $columns, true)) {
         $pdo->exec('ALTER TABLE guests ADD COLUMN greeting TEXT');         // typed greeting, used as it is
         $pdo->exec('ALTER TABLE guests ADD COLUMN greeting_style TEXT');   // 'full', 'first', or NULL for the site's choice
@@ -172,10 +176,10 @@ function place_html(): string
 // Returns [] for "The O'Brien Family" etc., where the number isn't known.
 function party_members(string $name): array
 {
-    if (preg_match('/\b(family|household|kids|children)\b/i', $name)) {
+    if (is_family_name($name)) {
         return [];
     }
-    $parts = preg_split('/\s*(?:&|\+|,|\band\b|\bplus\b)\s*/i', trim($name), -1, PREG_SPLIT_NO_EMPTY);
+    $parts = array_map('trim', preg_split(NAME_SEPARATORS, trim($name), -1, PREG_SPLIT_NO_EMPTY));
     if (!$parts) {
         return [trim($name)];
     }
@@ -183,10 +187,10 @@ function party_members(string $name): array
     $lastWords = preg_split('/\s+/', end($parts));
     $surname = count($lastWords) > 1 ? end($lastWords) : '';
     foreach ($parts as $i => $part) {
-        if (preg_match('/^(guest|plus one|one|1)$/i', $part)) {
+        if (preg_match('/^(guest|plus one|one|1|invitad[oa]|acompañante|gast|begleitung|invité|invitée|manuhiri|gwestai|ضيف|مرافق|同伴|嘉宾|嘉賓)$/iu', $part)) {
             $parts[$i] = 'Guest';
         } elseif ($surname !== '' && $i < count($parts) - 1
-            && preg_match('/^(mr|mrs|ms|miss|mx|dr|prof|sir|lady|lord|rev)\.?$/i', $part)) {
+            && preg_match('/^(' . NAME_TITLES . ')\.?$/iu', $part)) {
             $parts[$i] = $part . ' ' . $surname;
         }
     }
@@ -285,11 +289,20 @@ function dietary_summary(array $guest): string
 // one choice for the whole site, which each invitation can override, or a
 // greeting typed in for that invitation.
 
-const NAME_SEPARATORS = '/(\s*(?:&|\+|,|\band\b|\bplus\b)\s*)/i';
+// What goes between people's names, in each language: "&", "+", commas
+// (also the Chinese 、 and ， and the Arabic ،), "and", "plus", "y", "und",
+// "et", "me" (te reo Māori), lowercase "a"/"ac" (Welsh; a capital A is
+// an initial) and a separate "و". 和, 与, 與 and 及 only count between names of two
+// or more characters, so a name like 王和平 stays whole.
+const NAME_SEPARATORS = '/(\s*(?:&|＆|\+|＋|,|，|、|،|\b(?:and|plus|y|und|et|me)\b|(?-i:\b(?:a|ac)\b)|(?<=\s)و(?=\s)|(?<=\p{Han}{2})[和与與及](?=\p{Han}{2}))\s*)/iu';
 // Words before a name that aren't first names. A title keeps the surname
 // ("Mr Smith"); a relation is followed by a first name ("Uncle Bob").
-const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col';
-const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby';
+const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col|sr|sra|srta|herr|frau|mme|mlle';
+const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby'
+    . '|tío|tía|tio|tia|abuelo|abuela|primo|prima|onkel|tante|oma|opa|cousine|oncle|tata|mamie|papi|papy'
+    . '|koro|kui|kuia|karani|whaea|matua|kōkā|pāpā'
+    . '|ewythr|wncwl|modryb|anti|nain|taid|mamgu|tadcu|mam-gu|tad-cu'
+    . '|عم|عمة|خال|خالة|جد|جدة|أبو|أم';
 
 // One person's name split into [the rest, surname, whether a first-names
 // greeting may drop it], or null when there's no surname to find:
@@ -299,10 +312,15 @@ const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|gran
 //   "Gran"       -> null
 function person_surname(string $person): ?array
 {
-    $words = preg_split('/\s+/', trim($person), -1, PREG_SPLIT_NO_EMPTY);
-    $titled = $words && preg_match('/^(' . NAME_TITLES . ')\.?$/i', $words[0]);
+    // Chinese names put the surname first with no space; rather than guess,
+    // they're left whole.
+    if (preg_match('/\p{Han}/u', $person)) {
+        return null;
+    }
+    $words = preg_split('/\s+/u', trim($person), -1, PREG_SPLIT_NO_EMPTY);
+    $titled = $words && preg_match('/^(' . NAME_TITLES . ')\.?$/iu', $words[0]);
     $first = $titled ? 1 : 0;
-    while ($first < count($words) - 1 && preg_match('/^(' . NAME_RELATIONS . ')$/i', $words[$first])) {
+    while ($first < count($words) - 1 && preg_match('/^(' . NAME_RELATIONS . ')$/iu', $words[$first])) {
         $first++;
     }
     if (count($words) - $first < ($titled ? 1 : 2)) {
@@ -311,16 +329,17 @@ function person_surname(string $person): ?array
     // The last word, with any particles before it ("van der Berg", "de la Cruz", "Ó Briain").
     $start = count($words) - 1;
     while ($start - 1 > $first
-        && preg_match('/^(van|von|de|der|den|da|di|du|la|le|del|della|dos|das|st\.?|ter|ten|ó|o|ní|nic|mac|mc|ap|bin|bint|ibn|al|el)$/iu', $words[$start - 1])) {
+        && preg_match('/^(van|von|de|der|den|da|di|du|la|le|del|della|dos|das|st\.?|ter|ten|ó|o|ní|nic|mac|mc|ap|bin|bint|ibn|al|el|بن|بنت|ابن|عبد|أبو|آل)$/iu', $words[$start - 1])) {
         $start--;
     }
     return [implode(' ', array_slice($words, 0, $start)), implode(' ', array_slice($words, $start)), !$titled];
 }
 
-// "The Smith Family" and similar are left exactly as written.
+// "The Smith Family" and similar are left exactly as written, and don't
+// say how many people are coming.
 function is_family_name(string $name): bool
 {
-    return (bool)preg_match('/\b(family|household|kids|children)\b/i', $name);
+    return (bool)preg_match('/\b(family|household|kids|children|familia|familie|famille)\b|whānau|whanau|teulu|عائلة|أسرة|一家|全家|家庭|家人/iu', $name);
 }
 
 // The name with surnames taken off: "Sarah, Tom and Lily Jones" ->
@@ -373,12 +392,69 @@ function initials(string $name): string
 
 // The short line above the couple's names on the code-entry page and at the
 // top of the invitation email. Set on the Invitation email tab.
-const DEFAULT_TAGLINE = "You're invited";
-
 function tagline(): string
 {
-    $tagline = trim(setting('tagline'));
-    return $tagline !== '' ? $tagline : DEFAULT_TAGLINE;
+    return own_wording('tagline', current_language()) ?: default_wording('tagline');
+}
+
+// --- Your wording in each language ----------------------------------------
+// The tagline and the invitation email's subject and text start as built-in
+// defaults, which are translated. Once you change them, your version is used:
+// in a language you've written a version for, that version; otherwise your
+// main-language version. Saved text that matches the default counts as the
+// default, so it keeps translating.
+
+// Your version of $key ('tagline', 'mail_subject', 'mail_body') for guests
+// reading $language, or '' if it should be the (translated) default.
+function own_wording(string $key, string $language): string
+{
+    if ($language !== site_language()) {
+        $own = trim(setting($key . '.' . $language));
+        if ($own !== '') {
+            return $own;
+        }
+    }
+    $main = trim(str_replace("\r\n", "\n", setting($key)));
+    return $main !== '' && $main !== in_language(site_language(), fn() => default_wording($key)) ? $main : '';
+}
+
+// The built-in default for $key, in the current language.
+function default_wording(string $key): string
+{
+    switch ($key) {
+        case 'tagline':
+            return t('home.tagline_default');
+        case 'mail_subject':
+            return t('email.invite_subject', ['couple' => COUPLE_NAMES, 'date' => subject_date()]);
+        case 'mail_body':
+            return t('email.invite_body', ['couple' => COUPLE_NAMES]);
+    }
+    return '';
+}
+
+// The wedding date without the weekday, for an email subject.
+function subject_date(): string
+{
+    $time = strtotime(WEDDING_DATE);
+    if (current_language() === site_language() || !$time) {
+        return (string)preg_replace('/^\w+day,? /', '', WEDDING_DATE);
+    }
+    $date = (new DateTimeImmutable('@' . $time))->setTimezone(new DateTimeZone('Europe/London'));
+    $months = t_list('date.months');
+    return t('date.short', ['day' => number_text($date->format('j')), 'month' => $months[(int)$date->format('n') - 1] ?? '',
+        'year' => number_text($date->format('Y'))]);
+}
+
+// Saves your version of $key for $language. Text matching the default is
+// stored as '' so it keeps translating.
+function save_wording(string $key, string $language, string $text): void
+{
+    $text = trim(str_replace("\r\n", "\n", $text));
+    if ($language === site_language()) {
+        save_setting($key, $text === in_language($language, fn() => default_wording($key)) ? '' : $text);
+    } else {
+        save_setting($key . '.' . $language, $text);
+    }
 }
 
 // The site-wide choice: 'full' (the default) or 'first'.
@@ -431,11 +507,41 @@ function split_guest_line(string $line): array
 // numbers) is ignored. Without headings, the first column is the name and any
 // other cell containing an @ is an address. Works with commas, semicolons or
 // tabs between columns, and with files saved from Excel or Numbers.
+// Which older encoding a non-UTF-8 spreadsheet is probably in. Chinese ones
+// come in pairs of high bytes. Big5 (Traditional) gives itself away with a
+// second byte below 0x7F, or a first byte of A4-AF: common characters in
+// Big5, but kana, Greek and box-drawing in GB18030 (Simplified), whose
+// characters start at B0. Anything else is taken as Windows-1252, older
+// Excel's Western European default.
+function legacy_encoding(string $bytes): string
+{
+    // Accented letters in Windows-1252 are single high bytes ("Renée"), so
+    // two high bytes side by side is what marks Chinese.
+    $high = preg_match_all('/[\x80-\xFF]/', $bytes);
+    $pairs = preg_match_all('/[\xA1-\xFE]{2}/', $bytes);
+    if (!$pairs || $pairs * 2 < $high * 0.5) {
+        return 'Windows-1252';
+    }
+    // Walk the characters in step (one byte for ASCII, two otherwise), so a
+    // second byte is never mistaken for a first.
+    for ($i = 0, $n = strlen($bytes); $i < $n - 1; $i++) {
+        $lead = ord($bytes[$i]);
+        if ($lead < 0x81) {
+            continue;
+        }
+        $trail = ord($bytes[++$i]);
+        if (($trail >= 0x40 && $trail <= 0x7E) || ($lead >= 0xA4 && $lead <= 0xAF && $trail >= 0xA1)) {
+            return 'BIG-5';
+        }
+    }
+    return mb_check_encoding($bytes, 'GB18030') ? 'GB18030' : 'BIG-5';
+}
+
 function parse_guest_csv(string $csv): array
 {
     $csv = (string)preg_replace('/^\xEF\xBB\xBF/', '', $csv);   // Excel's byte-order mark
     if (!preg_match('//u', $csv) && function_exists('mb_convert_encoding')) {
-        $csv = (string)mb_convert_encoding($csv, 'UTF-8', 'Windows-1252');   // older Excel
+        $csv = (string)mb_convert_encoding($csv, 'UTF-8', legacy_encoding($csv));   // older Excel
     }
     $first = strtok($csv, "\n") ?: '';
     $counts = [',' => substr_count($first, ','), ';' => substr_count($first, ';'), "\t" => substr_count($first, "\t")];
@@ -447,12 +553,14 @@ function parse_guest_csv(string $csv): array
     $rows = [];
     $nameCol = 0;
     $emailCols = null;   // null = no headings: any other cell with an @
+    $languageCol = null;
     $line = 0;
     while (($cells = fgetcsv($in, 0, (string)$delimiter, '"', '')) !== false) {
         $cells = array_map(fn($c) => trim((string)$c), $cells);
         $heading = '/^(full |guest |first |party )?(names?|guests?|invit\w*|e-?mails?( address(es)?)?)( ?\d+)?$/i';
         if ($line++ === 0 && !preg_grep('/@/', $cells) && preg_grep($heading, $cells)) {
             $emailCols = array_keys(preg_grep('/mail/i', $cells));
+            $languageCol = array_keys(preg_grep('/^(lang(uage)?|idioma|sprache|langue|اللغة|语言|語言)$/iu', $cells))[0] ?? null;
             $named = array_keys(array_diff_key(preg_grep('/name|guest|invit/i', $cells), array_flip($emailCols)));
             $nameCol = $named ? $named[0] : 0;
             continue;
@@ -470,14 +578,14 @@ function parse_guest_csv(string $csv): array
             $emails = clean_emails(implode(',', $emails));
         }
         if ($name !== '') {
-            $rows[] = [$name, $emails];
+            $rows[] = $languageCol !== null ? [$name, $emails, language_from_text($cells[$languageCol] ?? '')] : [$name, $emails];
         }
     }
     fclose($in);
     return $rows;
 }
 
-// Adds invitations from [[name, emails], …], each with its own code.
+// Adds invitations from [[name, emails, language or null], …], each with its own code.
 // $skipExisting leaves out names already on the list (so uploading the same
 // file twice doesn't double up). Returns [added, names with a bad address,
 // names skipped].
@@ -491,11 +599,13 @@ function add_guests(array $rows, bool $skipExisting = false): array
             $existing[$key($g['name'])] = true;
         }
     }
-    $insert = db()->prepare('INSERT INTO guests (code, name, email) VALUES (?, ?, ?)');
+    $insert = db()->prepare('INSERT INTO guests (code, name, email, language, language_set_by) VALUES (?, ?, ?, ?, ?)');
     $added = 0;
     $bad = [];
     $skipped = [];
-    foreach ($rows as [$name, $emails]) {
+    foreach ($rows as $row) {
+        [$name, $emails] = $row;
+        $language = valid_language($row[2] ?? null) ? $row[2] : null;
         if (isset($existing[$key($name)])) {
             $skipped[] = $name;
             continue;
@@ -503,7 +613,7 @@ function add_guests(array $rows, bool $skipExisting = false): array
         if (has_bad_email($emails)) {
             $bad[] = $name;
         }
-        $insert->execute([generate_code(), $name, $emails !== '' ? $emails : null]);
+        $insert->execute([generate_code(), $name, $emails !== '' ? $emails : null, $language, $language ? 'admin' : null]);
         if ($skipExisting) {
             $existing[$key($name)] = true;   // and a repeat within the same file
         }
@@ -581,15 +691,15 @@ function dietary_donut_svg(array $segments, int $peopleWith, int $peopleComing):
         $arcs .= '<circle class="seg" data-seg="' . $i . '" cx="90" cy="90" r="' . $r . '" fill="none" stroke="' . $colour . '" '
             . 'stroke-width="26" stroke-dasharray="' . round(max($len - $gap, 0.5), 2) . ' ' . round($circ, 2) . '" '
             . 'stroke-dashoffset="' . round(-$offset, 2) . '" transform="rotate(-90 90 90)">'
-            . '<title>' . h($label) . ': ' . $count . ' (' . $pct . '%)</title></circle>';
+            . '<title>' . h(($label === 'Other' ? t('admin.diet.other') : diet_label($label)) . ': ' . $count . ' (' . $pct . '%)') . '</title></circle>';
         $offset += $len;
         $i++;
     }
     return '<svg class="donut" viewBox="0 0 180 180" width="180" height="180" role="img" '
-        . 'aria-label="Mix of dietary requirements; details in the table beside it">'
+        . 'aria-label="' . th('admin.diet.chart_label') . '">'
         . $arcs
         . '<text x="90" y="88" text-anchor="middle" class="donut-number">' . $peopleWith . '</text>'
-        . '<text x="90" y="110" text-anchor="middle" class="donut-caption">of ' . $peopleComing . ' coming</text>'
+        . '<text x="90" y="110" text-anchor="middle" class="donut-caption">' . th('admin.diet.of_coming', ['count' => $peopleComing]) . '</text>'
         . '</svg>';
 }
 
@@ -718,7 +828,7 @@ function csv_cell(?string $value): string
 function page_header(string $title, string $bodyClass = ''): void
 {
     ?><!doctype html>
-<html lang="en">
+<html lang="<?= h(current_language()) ?>" dir="<?= is_rtl() ? 'rtl' : 'ltr' ?>">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -755,14 +865,16 @@ function lightbox_footer(bool $adminLink = true): string
         $place = MADE_IN_URL !== ''
             ? '<a class="easter-egg" href="' . h(MADE_IN_URL) . '" target="_blank" rel="noopener">' . h(MADE_IN) . '</a>'
             : h(MADE_IN);
-        $made = '<br><span class="made-with">Made with <svg class="heart" viewBox="0 0 24 24" width="14" height="14" role="img" aria-label="love">'
+        $heart = '<svg class="heart" viewBox="0 0 24 24" width="14" height="14" role="img" aria-label="' . th('footer.love') . '">'
             . '<path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.8 4.5c2.1 0 3.6 1.1 4.2 2.6h2c.6-1.5 2.1-2.6 4.2-2.6 3.8 0 5.9 3.9 4.4 7.3C19.5 16.4 12 21 12 21z" fill="#d6283b"/>'
-            . '</svg> in ' . $place . '</span>';
+            . '</svg>';
+        $made = '<br><span class="made-with">' . t_html('footer.made_with', ['heart' => $heart, 'place' => $place]) . '</span>';
     }
-    $admin = $adminLink ? '<a href="/admin.php">Admin</a> &middot; ' : '';
-    return '<p class="site-footer">' . $admin . 'v' . h(SITE_VERSION) . $made
-        . '<br><span class="copyright">&copy; ' . date('Y') . ' <a href="' . h(PROJECT_URL) . '" target="_blank" rel="noopener">'
-        . h(PROJECT_NAME) . '</a></span></p>';
+    $admin = $adminLink ? '<a href="/admin.php">' . th('footer.admin') . '</a> &middot; ' : '';
+    // The version and "© year global.ly" stay left-to-right in right-to-left pages.
+    return '<p class="site-footer">' . $admin . '<bdi dir="ltr">v' . h(SITE_VERSION) . '</bdi>' . $made
+        . '<br><bdi class="copyright" dir="ltr">&copy; ' . date('Y') . ' <a href="' . h(PROJECT_URL) . '" target="_blank" rel="noopener">'
+        . h(PROJECT_NAME) . '</a></bdi></p>' . language_menu();
 }
 
 function page_footer(): void
@@ -771,3 +883,4 @@ function page_footer(): void
 }
 
 require_once __DIR__ . '/photo.php';
+require_once __DIR__ . '/i18n.php';

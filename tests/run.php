@@ -225,8 +225,119 @@ users_db()->prepare('INSERT INTO users (name, username, email, notify_feedback, 
 same('opted-in people who can sign in, one email per address', ['couple@example.com', 'pat@example.com'],
     array_column(feedback_recipients(), 'email'));
 check('owner contact saved', admin_contact(0) === ['email' => 'couple@example.com', 'notify' => true]);
+same('each recipient in their own language: the site\'s by default', ['en', 'en'], array_column(feedback_recipients(), 'language'));
+$patId = (int)users_db()->query("SELECT id FROM users WHERE username = 'pat'")->fetchColumn();
+save_admin_language($patId, 'de');
+save_admin_language(0, 'xx');
+same('...or the one they chose (unknown ones ignored)', ['en', 'de'], array_column(feedback_recipients(), 'language'));
+[$fbSubject, $fbText, $fbHtml] = in_language('de', fn() => render_feedback_notice('Léa', 'Hallo!', false));
+check('feedback notice in German', $fbSubject === 'Neue Nachricht von Léa' && strpos($fbText, 'keine E-Mail-Adresse') !== false
+    && strpos($fbHtml, '<strong>Léa</strong> hat Ihnen') !== false && strpos($fbHtml, 'lang="de"') !== false);
+$fbAr = in_language('ar', fn() => render_feedback_notice('<b>x</b>', 'hi', true))[2];
+check('feedback notice in Arabic is right-to-left and escaped', strpos($fbAr, 'dir="rtl"') !== false && strpos($fbAr, '<b>x</b>') === false
+    && strpos($fbAr, 'border-right') !== false);
+[$suSubject, $suText, $suHtml] = in_language('ar', fn() => render_setup_email(['name' => 'Pat', 'username' => 'pat'], 'https://example.com/x', true));
+check('reset email in Arabic, with the plural for 7 days', strpos($suText, 'خلال 7 أيام') !== false && strpos($suHtml, 'إعادة تعيين كلمة المرور') !== false);
+$suEn = in_language('en', fn() => render_setup_email(['name' => 'Pat', 'username' => 'pat'], 'https://example.com/x', false));
+check('setup email in English', $suEn[0] === 'Your ' . COUPLE_NAMES . ' admin link' && strpos($suEn[1], 'expires in 7 days') !== false
+    && strpos($suEn[2], 'Set up sign-in') !== false);
+save_admin_language($patId, '');
 users_db()->exec("DELETE FROM users WHERE username IN ('pat', 'kim', 'new', 'same')");
 save_admin_contact(0, '', false);
+
+section('Your wording in each language');
+foreach (['mail_subject', 'mail_body', 'tagline'] as $k) { save_setting($k, ''); foreach (array_keys(LANGUAGE_NAMES) as $c) { save_setting("$k.$c", ''); } }
+save_setting('mail_subject', "You're invited: " . COUPLE_NAMES . ', 9 September 2028');   // what older versions saved: the default
+same('a saved default still translates', 'Estás invitado: ' . COUPLE_NAMES . ', 9 de septiembre de 2028', mail_settings('es')['subject']);
+save_wording('mail_subject', 'en', "You're invited: " . COUPLE_NAMES . ', 9 September 2028');
+same('saving the default stores nothing', '', setting('mail_subject'));
+save_wording('mail_subject', 'en', 'Come and celebrate with us!');
+same('your own wording is used for untranslated languages', 'Come and celebrate with us!', mail_settings('es')['subject']);
+save_wording('mail_subject', 'es', '¡Ven a celebrarlo con nosotros!');
+same('a translation is used where there is one', '¡Ven a celebrarlo con nosotros!', mail_settings('es')['subject']);
+same('...and only for its language', 'Come and celebrate with us!', mail_settings('de')['subject']);
+check('default message translated, with its placeholders', strpos(mail_settings('fr')['body'], 'Bonjour {name},') === 0
+    && strpos(mail_settings('fr')['body'], '{link}') !== false && strpos(mail_settings('fr')['body'], '{code}') !== false);
+same('default tagline translated', 'Sie sind eingeladen', in_language('de', 'tagline'));
+save_wording('tagline', 'en', 'Save the date');
+save_wording('tagline', 'fr', 'Réservez la date');
+same('tagline: translation', 'Réservez la date', in_language('fr', 'tagline'));
+same('tagline: own wording where untranslated', 'Save the date', in_language('es', 'tagline'));
+[$arSubject, $arText, $arHtml] = in_language('ar', fn() => render_invite(['name' => 'Sara', 'code' => 'K7MPX4QR'], mail_settings('ar')));
+check('an Arabic invitation is right-to-left, in Arabic', strpos($arHtml, '<html lang="ar" dir="rtl">') !== false
+    && strpos($arHtml, 'عرض دعوتكم') !== false && strpos($arHtml, 'السبت 9 سبتمبر 2028') !== false && strpos($arText, 'أعزّاءنا Sara') === 0);
+foreach (['mail_subject', 'mail_body', 'tagline'] as $k) { save_setting($k, ''); foreach (array_keys(LANGUAGE_NAMES) as $c) { save_setting("$k.$c", ''); } }
+$seeded = content_db()->query('SELECT id FROM sections ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+same('the sample sections come with a draft in every language', [array_values(array_diff(site_languages(), ['en'])), array_values(array_diff(site_languages(), ['en']))],
+    array_map(fn($id) => array_values(array_intersect(site_languages(), section_languages((int)$id))), array_slice($seeded, 0, 2)));
+$dayDe = section_translation((int)$seeded[0], 'de');
+check('...with the date in that language', strpos($dayDe['body'] ?? '', 'Samstag, 9. September 2028') !== false && ($dayDe['title'] ?? '') === 'Der Tag');
+$tplHotels = section_templates()['hotels'];
+content_db()->prepare('INSERT INTO sections (title, body) VALUES (?, ?)')->execute([$tplHotels['title'], $tplHotels['body']]);
+$fromTemplate = (int)content_db()->lastInsertId();
+content_db()->prepare('INSERT INTO sections (title, body) VALUES (?, ?)')->execute([$tplHotels['title'], $tplHotels['body'] . "\nOur own words."]);
+$reworded = (int)content_db()->lastInsertId();
+translate_starter_sections(content_db());
+same('a section from a template gets drafts', 'Où dormir', section_translation($fromTemplate, 'fr')['title'] ?? '');
+same('a reworded one is left alone', [], section_languages($reworded));
+content_db()->prepare('DELETE FROM section_translations WHERE section_id = ? AND language = ?')->execute([$fromTemplate, 'cy']);
+save_section_translation($fromTemplate, 'fr', 'Mon titre', 'Mon texte', 'Test');
+translate_starter_sections(content_db());
+same('a language added later gets its draft too', 'Ble i aros', section_translation($fromTemplate, 'cy')['title'] ?? '');
+same('...without replacing translations already there', 'Mon titre', section_translation($fromTemplate, 'fr')['title'] ?? '');
+content_db()->exec("DELETE FROM section_translations WHERE section_id IN ($fromTemplate, $reworded)");
+content_db()->exec("DELETE FROM sections WHERE id = $fromTemplate");
+$secId = $reworded;
+$mainSec = find_section($secId);
+save_section_translation($secId, 'es', 'El día', '', 'Test');
+$esSec = localise_sections([$mainSec], 'es')[0];
+check('section translation: title translated, empty text uses the main text', $esSec['title'] === 'El día' && $esSec['body'] === $mainSec['body']);
+check('section translation only for its language', localise_sections([$mainSec], 'de')[0]['title'] === $mainSec['title']);
+save_section_translation($secId, 'es', '', '', 'Test');
+same('clearing both removes the translation', [], section_languages($secId));
+content_db()->exec("DELETE FROM sections WHERE id = $secId");
+
+section('Update emails in each language');
+$starters = starter_templates();
+same('five starter templates, named in the site language', 'Reminder to reply', $starters[0]['name']);
+same('starters come translated into every other language', array_values(array_diff(site_languages(), ['en'])), array_keys($starters[0]['translations']));
+same('a starter translation has the couple filled in', 'Sind Sie dabei? ' . COUPLE_NAMES, $starters[0]['translations']['de']['subject']);
+$seeded = notify_db()->query("SELECT * FROM email_templates WHERE name = 'Reminder to reply'")->fetch();
+check('seeded starters keep their translations', ($seeded ? template_translations($seeded)['es']['body'] ?? '' : '') !== '');
+$old = starter_templates()[1];
+$insertOld = notify_db()->prepare('INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)');
+$insertOld->execute([$old['name'], $old['subject'], str_replace("\n", "\r\n", $old['body'])]);
+$unchangedId = (int)notify_db()->lastInsertId();
+$insertOld->execute([$old['name'], $old['subject'], $old['body'] . ' Changed.']);
+$changedId = (int)notify_db()->lastInsertId();
+translate_starter_templates(notify_db());
+check('upgrading: an unchanged starter gets its translations', isset(template_translations(find_template($unchangedId))['ar']));
+same('upgrading: a changed one is left alone', [], template_translations(find_template($changedId)));
+$partial = template_translations(find_template($unchangedId));
+unset($partial['cy']);
+$partial['fr'] = ['subject' => 'Mon sujet', 'body' => 'Mon texte'];
+notify_db()->prepare('UPDATE email_templates SET translations = ? WHERE id = ?')->execute([json_encode($partial), $unchangedId]);
+translate_starter_templates(notify_db());
+$after = template_translations(find_template($unchangedId));
+check('templates: a language added later is filled in, written ones kept', isset($after['cy']) && $after['fr']['subject'] === 'Mon sujet');
+notify_db()->exec("DELETE FROM email_templates WHERE id IN ($unchangedId, $changedId)");
+same('translations from a form are cleaned', ['es' => ['subject' => 'Hola a todos', 'body' => "Hola {name}\nAdiós"]], clean_translations([
+    'es' => ['subject' => "Hola\na todos", 'body' => "Hola {name}\r\nAdiós "],
+    'en' => ['subject' => 'Main language', 'body' => 'is not a translation'],
+    'xx' => ['subject' => 'Unknown', 'body' => 'language'],
+    'de' => ['subject' => '', 'body' => ''],
+    'fr' => 'not an array',
+    'ar' => ['subject' => ['nested'], 'body' => ['arrays']],
+]));
+$tr = ['es' => ['subject' => 'Asunto', 'body' => ''], 'de' => ['subject' => '', 'body' => 'Text']];
+same('update: a translated subject, the main text where not translated', ['Asunto', 'Main text'], update_version('es', 'Subject', 'Main text', $tr));
+same('update: the main subject where not translated', ['Subject', 'Text'], update_version('de', 'Subject', 'Main text', $tr));
+same('update: no translation, the main version', ['Subject', 'Main text'], update_version('fr', 'Subject', 'Main text', $tr));
+[, $frText, $frHtml] = in_language('fr', fn() => render_update(['name' => 'Léa', 'code' => 'K7MPX4QR'], 'Sujet', "Bonjour {name}\n\n{link}"));
+check('update wording around the message in the guest\'s language', strpos($frHtml, 'Des nouvelles de ' . h(COUPLE_NAMES)) !== false
+    && strpos($frText, 'Ne plus recevoir ces nouvelles: https://example.com/unsubscribe.php') !== false && strpos($frHtml, 'lang="fr"') !== false);
+$arUpdate = in_language('ar', fn() => render_update(['name' => 'Sara', 'code' => 'K7MPX4QR'], 'S', 'B'))[2];
+check('an Arabic update is right-to-left', strpos($arUpdate, 'dir="rtl"') !== false && strpos($arUpdate, 'إيقاف هذه الأخبار') !== false);
 
 section('Tagline');
 save_setting('tagline', '');
@@ -259,6 +370,173 @@ section('Version');
 check('SITE_VERSION is MAJOR.MINOR.PATCH', (bool)preg_match('/^\d+\.\d+\.\d+$/', SITE_VERSION));
 check('README badge matches SITE_VERSION', strpos((string)file_get_contents(dirname(__DIR__) . '/README.md'), 'badge/version-' . SITE_VERSION . '-') !== false);
 check('CHANGELOG has this version', strpos((string)file_get_contents(dirname(__DIR__) . '/CHANGELOG.md'), '## ' . SITE_VERSION . "\n") !== false);
+
+section('Languages');
+same('browser: first choice offered', 'fr', negotiate_language('fr-CA,fr;q=0.9,en;q=0.8', array_keys(LANGUAGE_NAMES)));
+same('browser: q values win over order', 'de', negotiate_language('en;q=0.5,de;q=0.9', array_keys(LANGUAGE_NAMES)));
+same('browser: skips languages not offered', 'en', negotiate_language('pt-BR,pt;q=0.9,en;q=0.5', array_keys(LANGUAGE_NAMES)));
+same('browser: nothing offered', null, negotiate_language('pt-BR,ja', array_keys(LANGUAGE_NAMES)));
+same('browser: Taiwan reads Traditional', 'zh-Hant', negotiate_language('zh-TW,zh;q=0.9', array_keys(LANGUAGE_NAMES)));
+same('browser: Hong Kong reads Traditional', 'zh-Hant', negotiate_language('zh-HK', array_keys(LANGUAGE_NAMES)));
+same('browser: mainland reads Simplified', 'zh-Hans', negotiate_language('zh-CN,zh;q=0.9', array_keys(LANGUAGE_NAMES)));
+same('browser: script subtags', 'zh-Hant', negotiate_language('zh-Hant-TW', array_keys(LANGUAGE_NAMES)));
+same('browser: q=0 means not wanted', 'es', negotiate_language('ar;q=0,es;q=0.4', array_keys(LANGUAGE_NAMES)));
+same('browser: junk ignored', 'en', negotiate_language('<script>, en', array_keys(LANGUAGE_NAMES)));
+same('plural: English', ['one', 'other', 'other'], [plural_form('en', 1), plural_form('en', 0), plural_form('en', 2)]);
+same('plural: French counts 0 as one', ['one', 'one', 'other'], [plural_form('fr', 0), plural_form('fr', 1), plural_form('fr', 2)]);
+same('plural: Arabic six forms', ['zero', 'one', 'two', 'few', 'many', 'other'],
+    [plural_form('ar', 0), plural_form('ar', 1), plural_form('ar', 2), plural_form('ar', 5), plural_form('ar', 11), plural_form('ar', 100)]);
+same('plural: Chinese has none', 'other', plural_form('zh-Hans', 1));
+check('Arabic is right-to-left, others aren\'t', is_rtl('ar') && !is_rtl('en') && !is_rtl('zh-Hant'));
+same('uses the language\'s own phrase', 'Sprache', in_language('de', fn() => t('language.menu')));
+same('unknown key shows the key', 'no.such.key', t('no.such.key'));
+same('placeholders filled', 'Sat 9 Sep 2028', t('date.long', ['weekday' => 'Sat', 'day' => 9, 'month' => 'Sep', 'year' => 2028]));
+same('HTML pieces kept, everything else escaped', '<b>Sat</b> &lt;9&gt; Sep 2028',
+    t_html('date.long', ['weekday' => '<b>Sat</b>'], ['day' => '<9>', 'month' => 'Sep', 'year' => '2028']));
+same('English date', 'Saturday 9 September 2028', format_date(new DateTimeImmutable('2028-09-09')));
+same('wedding date as written in the site language', WEDDING_DATE, wedding_date_text());
+check('language menu offers every language, each in its own name', (function () {
+    $menu = language_menu();
+    return substr_count($menu, 'name="lang"') === count(site_languages()) && strpos($menu, 'lang="ar" dir="rtl"') !== false
+        && strpos($menu, '简体中文') !== false;
+})());
+same('language codes from a request become the site\'s own', ['es', null, null, null], array_map('known_language', ['es', 'ES', 'es ', "es\r\nX-Evil: 1"]));
+same('only offered languages pass', [null, 'cy'], [offered_language('xx'), offered_language('cy')]);
+same('going back after choosing a language stays on this site', ['/guest.php', '/', '/', '/', '/'],
+    array_map('back_path', ['/guest.php', '//evil.example/x', '/\\evil.example', 'https://evil.example', "/guest.php\r\nSet-Cookie: x=1"]));
+same('browser languages ranked, best first', ['de', 'fr', 'en'], ranked_languages('fr;q=0.8, de, en;q=0.5, xx', ['en', 'de', 'fr']));
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'cy, fr;q=0.8';
+$order = languages_for_visitor();
+same('the menu lists the browser\'s languages first', ['cy', 'fr', 'en'], array_slice($order, 0, 3));
+check('...then every other language once', count($order) === count(site_languages()) && count(array_unique($order)) === count($order));
+check('the current language is ticked', (bool)preg_match('#value="en"[^>]*aria-current="true">English <span class="tick"#', language_menu()));
+check('the corner menu is its own variant', strpos(language_menu('top'), 'class="language-menu top"') !== false);
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'es';
+same('hint: the browser\'s language, when the page is in another', 'es', language_hint(['language_set_by' => 'admin']));
+same('...not when the guest chose this language themselves', null, language_hint(['language_set_by' => 'guest']));
+same('...not when the page is already in it', null, in_language('es', fn() => language_hint(['language_set_by' => 'admin'])));
+$_COOKIE[LANGUAGE_HINT_COOKIE] = 'es';
+same('...not once turned down', null, language_hint(['language_set_by' => 'admin']));
+unset($_COOKIE[LANGUAGE_HINT_COOKIE]);
+$hint = language_hint_html(['language_set_by' => 'browser']);
+check('the hint is written in the suggested language', strpos($hint, 'Ver esta página en Español') !== false && strpos($hint, 'lang="es"') !== false
+    && strpos($hint, 'name="dismiss" value="es"') !== false);
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'ar';
+check('...right to left for Arabic', strpos(language_hint_html(null), 'dir="rtl"') !== false);
+unset($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+same('no browser language, no hint', null, language_hint(null));
+$_COOKIE[LANGUAGE_COOKIE] = 'zh-Hans';
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'de';
+same('a language chosen in this browser is the one suggested', 'zh-Hans', language_hint(['language_set_by' => 'admin']));
+unset($_COOKIE[LANGUAGE_COOKIE], $_SERVER['HTTP_ACCEPT_LANGUAGE']);
+
+section('Phrase files');
+$english = phrases('en');
+$holders = function ($value): array {
+    preg_match_all('/\{[a-z_]+\}/', implode("\n", (array)$value), $m);
+    $found = array_values(array_unique($m[0]));
+    sort($found);
+    return $found;
+};
+$pluralForms = ['en' => ['one', 'other'], 'es' => ['one', 'other'], 'de' => ['one', 'other'], 'fr' => ['one', 'other'],
+    'ar' => ['zero', 'one', 'two', 'few', 'many', 'other'], 'zh-Hans' => ['other'], 'zh-Hant' => ['other'], 'mi' => ['one', 'other'], 'cy' => ['zero', 'one', 'two', 'few', 'many', 'other']];
+foreach (array_keys(LANGUAGE_NAMES) as $code) {
+    $file = __DIR__ . '/../private/lang/' . $code . '.php';
+    check("$code: phrase file exists", is_file($file));
+    check("$code: admin phrase file exists", is_file(__DIR__ . '/../private/lang/admin/' . $code . '.php'));
+    $these = phrases($code);
+    $missing = array_diff(array_keys($english), array_keys($these));
+    $extra = array_diff(array_keys($these), array_keys($english));
+    check("$code: has every phrase" . ($missing ? ' (missing ' . implode(', ', array_slice($missing, 0, 5)) . ')' : ''), !$missing);
+    check("$code: no unknown phrases" . ($extra ? ' (' . implode(', ', array_slice($extra, 0, 5)) . ')' : ''), !$extra);
+    $badHolders = [];
+    $badLists = [];
+    $badPlurals = [];
+    foreach ($english as $key => $value) {
+        if (!isset($these[$key])) {
+            continue;
+        }
+        $isPlural = is_array($value) && isset($value['other']);
+        if ($isPlural) {
+            if (!is_array($these[$key]) || array_diff($pluralForms[$code], array_keys($these[$key]))) {
+                $badPlurals[] = $key;
+            }
+        } elseif (is_array($value) && (!is_array($these[$key]) || count($these[$key]) !== count($value))) {
+            $badLists[] = $key;
+        }
+        if ($holders($value) !== $holders($these[$key])) {
+            $badHolders[] = $key;
+        }
+    }
+    check("$code: same {placeholders} as English" . ($badHolders ? ' (' . implode(', ', array_slice($badHolders, 0, 5)) . ')' : ''), !$badHolders);
+    check("$code: lists the same length" . ($badLists ? ' (' . implode(', ', $badLists) . ')' : ''), !$badLists);
+    check("$code: every plural form" . ($badPlurals ? ' (' . implode(', ', $badPlurals) . ')' : ''), !$badPlurals);
+}
+same('Spanish date', 'sábado, 9 de septiembre de 2028', in_language('es', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('German date', 'Samstag, 9. September 2028', in_language('de', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('French date', 'samedi 9 septembre 2028', in_language('fr', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Arabic date', 'السبت 9 سبتمبر 2028', in_language('ar', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Chinese date', '2028年9月9日 星期六', in_language('zh-Hans', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('wedding date in another language is formatted', 'sábado, 9 de septiembre de 2028', in_language('es', 'wedding_date_text'));
+same('dietary options shown translated', 'Vegetariano', in_language('es', fn() => diet_label('Vegetarian')));
+same('typed dietary needs shown as typed', 'Sin cebolla', in_language('es', fn() => diet_label('Sin cebolla')));
+
+section('Names in other languages');
+same('Spanish "y"', ['Ana', 'Luis García'], party_members('Ana y Luis García'));
+same('German "und"', ['Anna', 'Max Müller'], party_members('Anna und Max Müller'));
+same('French "et"', ['Léa', 'Hugo Martin'], party_members('Léa et Hugo Martin'));
+same('Arabic "و" and comma', ['سارة', 'توم', 'ليلى جونز'], party_members('سارة، توم و ليلى جونز'));
+same('Chinese 和 and 、', ['王小明', '李华', '陈叔叔'], party_members('王小明和李华、陈叔叔'));
+same('a 和 inside a name stays', ['王和平'], party_members('王和平'));
+same('full-width ampersand', ['张伟', '刘芳'], party_members('张伟＆刘芳'));
+same('Chinese names have no surname guessed', ['王小明和李华', '王小明和李华'], [first_names('王小明和李华'), name_html('王小明和李华')]);
+same('German titles keep the surname', ['Herr Müller', 'Frau Müller'], party_members('Herr & Frau Müller'));
+same('relations in other languages are first names', 'Tío Pepe', first_names('Tío Pepe'));
+same('Arabic surname after عبد', ['سارة', 'عبد الله', true], person_surname('سارة عبد الله'));
+same('family words in other languages', [[], [], [], []], [party_members('Familia García'), party_members('Familie Müller'), party_members('عائلة خان'), party_members('王家一家')]);
+same('plus-ones in other languages', ['Ana', 'Guest'], party_members('Ana + acompañante'));
+$gbCsv = mb_convert_encoding("王小明,ming@example.com\n", 'GB18030', 'UTF-8');
+$big5Csv = mb_convert_encoding("陳美玲,mei@example.com\n", 'BIG-5', 'UTF-8');
+$gbTricky = mb_convert_encoding("王小明李华Lee,ming@example.com\n", 'GB18030', 'UTF-8');   // 小 ends in A1, 华 in AA before "L"
+same('Simplified CSV not mistaken for Big5 mid-character', [['王小明李华Lee', 'ming@example.com']], parse_guest_csv($gbTricky));
+same('Simplified Chinese CSV from older Excel', [['王小明', 'ming@example.com']], parse_guest_csv($gbCsv));
+same('Traditional Chinese CSV from older Excel', [['陳美玲', 'mei@example.com']], parse_guest_csv($big5Csv));
+same('Western CSV from older Excel, accents and all', [['Renée Dupré', 'renee@example.com']],
+    parse_guest_csv(mb_convert_encoding("Renée Dupré,renee@example.com\n", 'Windows-1252', 'UTF-8')));
+
+same('Māori "me" between people', ['Hēmi', 'Mere Tāmati'], party_members('Hēmi me Mere Tāmati'));
+same('a whānau invitation doesn\'t say how many', [], party_members('Te whānau Parata'));
+same('Welsh "a" and "ac" between people', ['Siân', 'Tomos', 'Lili Jones'], party_members('Siân, Tomos a Lili Jones'));
+same('...but a capital A is an initial', ['John A Smith', 'Mary Smith'], party_members('John A Smith & Mary Smith'));
+same('Welsh family invitation', [], party_members('Teulu Jones'));
+same('Welsh date', 'Dydd Sadwrn 9 Medi 2028', in_language('cy', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Welsh plurals', ['zero', 'one', 'two', 'few', 'other', 'many', 'other'], array_map(fn($n) => plural_form('cy', $n), [0, 1, 2, 3, 4, 6, 10]));
+same('Māori date', 'Rāhoroi, 9 Mahuru 2028', in_language('mi', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Māori from a spreadsheet', ['mi', 'mi'], array_map('language_from_text', ['Māori', 'Te Reo Māori']));
+
+section('Admin in each language');
+$t9 = mktime(14, 5, 0, 9, 9, 2028);
+same('admin date', '9 Sep', in_language('en', fn() => admin_date($t9)));
+same('admin date with year and time, German', '9. Sept. 2028, 14:05', in_language('de', fn() => admin_date($t9, 'full')));
+same('admin date, French time', '9 sept. à 14:05', in_language('fr', fn() => admin_date($t9, 'time')));
+same('admin date, Chinese with weekday', '9月9日 周六', in_language('zh-Hans', fn() => admin_date($t9, 'weekday')));
+same('names joined, Chinese', '甲、乙', in_language('zh-Hans', fn() => join_names(['甲', '乙'])));
+same('long lists shortened', 'a, b and 2 more', in_language('en', fn() => join_names(['a', 'b', 'c', 'd'], 2)));
+same('back arrow points the reading way', ['&larr;', '&rarr;'], [in_language('en', 'back_arrow'), in_language('ar', 'back_arrow')]);
+same('language from a spreadsheet', ['es', 'de', 'zh-Hant', 'ar', 'zh-Hans', null],
+    array_map('language_from_text', ['es', 'Deutsch', 'zh_TW', 'arabic', '简体中文', 'Klingon']));
+same('CSV with a Language column', [['Ana', 'ana@example.com', 'es'], ['Bob', '', null]],
+    parse_guest_csv("Name,Email,Language\nAna,ana@example.com,Español\nBob,,\n"));
+same('Arabic plural for 7 days in admin', 'منذ 7 أيام', in_language('ar', fn() => t('admin.ago.days', ['count' => 7])));
+$jsPhrases = in_language('de', fn() => js_phrases(['admin.bulk.js_selected', 'admin.copied']));
+check('script phrases: plurals sent as forms, others as text', strpos($jsPhrases, '&quot;one&quot;') !== false && strpos($jsPhrases, 'Kopiert') !== false);
+same('audiences in the admin language', 'Noch unsicher', in_language('de', fn() => audiences()['maybe']));
+same('new sections start in the site language', 'Where to stay', in_language('fr', fn() => section_templates()['hotels']['title']));
+same('...with labels in the admin language', 'Où dormir', in_language('fr', fn() => section_templates()['hotels']['label']));
+save_admin_language(0, 'fr');
+same('admin language: chosen', ['fr', 'fr'], [admin_language_choice(0), admin_language(0)]);
+save_admin_language(0, 'xx');
+same('admin language: none chosen, emails in the site language', [null, 'en'], [admin_language_choice(0), admin_language(0)]);
 
 section('Invitation codes');
 $code = generate_code();
@@ -424,6 +702,34 @@ foreach ($argv as $arg) {
     check('RSVP stays open and wiggles until they reply', strpos($guestPage['body'], 'class="card collapsible nudge" id="rsvp" data-key="rsvp" data-open="1"') !== false);
     check('guest page shows the date', strpos($guestPage['body'], WEDDING_DATE) !== false);
     check('guest page shows RSVP with a tick box per person', $guestPage['status'] === 200 && substr_count($guestPage['body'], 'name="coming[]"') === 2);
+
+    // Languages: the first visit saves one from the browser; the footer menu changes it.
+    $langOf = fn() => db()->query('SELECT language || \'/\' || language_set_by FROM guests WHERE code = ' . db()->quote($code))->fetchColumn();
+    check('first visit saves a language on the invitation', $langOf() === 'en/browser');
+    check('guest pages offer the language menu', strpos($guestPage['body'], 'action="/language.php"') !== false);
+    check('...in the top corner as well as the footer', strpos($guestPage['body'], 'class="language-menu top"') !== false
+        && strpos($guestPage['body'], 'class="language-menu footer"') !== false);
+    $dismissed = $get('/language.php', ['csrf' => $csrf($guestPage['body']), 'dismiss' => 'es', 'back' => '/guest.php']);
+    check('turning down the suggestion remembers it, and changes nothing else', stripos($dismissed['headers'], 'set-cookie: lang_hint=es') !== false
+        && stripos($dismissed['headers'], 'set-cookie: lang=') === false);
+    $chose = $get('/language.php', ['csrf' => $csrf($guestPage['body']), 'lang' => 'ar', 'back' => '/guest.php']);
+    check('choosing a language saves it and goes back', $langOf() === 'ar/guest' && stripos($chose['headers'], "location: /guest.php\r\n") !== false);
+    $arabic = $get('/guest.php')['body'];
+    check('the guest page is then Arabic and right-to-left', strpos($arabic, '<html lang="ar" dir="rtl">') !== false
+        && strpos($arabic, 'تأكيد الحضور') !== false && strpos($arabic, 'السبت 9 سبتمبر 2028') !== false);
+    check('dietary options shown in Arabic, saved in English', strpos($arabic, '<option value="Vegetarian">نباتي</option>') !== false);
+    $evil = $get('/language.php', ['csrf' => $csrf($arabic), 'lang' => 'en', 'back' => '//evil.example/x']);
+    check('the language menu only goes back to this site', stripos($evil['headers'], "location: /\r\n") !== false);
+    $refused = $get('/language.php', ['csrf' => $csrf($get('/guest.php')['body']), 'lang' => 'klingon', 'back' => '/guest.php']);
+    check('unknown languages are ignored', $langOf() === 'en/guest');
+    $fresh = function (string $path, string $accept) use ($base) {
+        $ch = curl_init($base . $path);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Accept-Language: ' . $accept]]);
+        return (string)curl_exec($ch);
+    };
+    check('code page follows the browser\'s language', strpos($fresh('/', 'es-ES,es;q=0.9,en;q=0.5'), 'Introduce tu código de invitación') !== false);
+    check('Taiwanese browsers get Traditional Chinese', strpos($fresh('/', 'zh-TW,zh;q=0.9'), '<html lang="zh-Hant" dir="ltr">') !== false);
+    check('unoffered languages fall back to the site\'s', strpos($fresh('/', 'pt-BR'), 'Enter your invitation code') !== false);
     $saved = $get('/guest.php', ['csrf' => $csrf($guestPage['body']), 'attending' => 'yes', 'coming' => ['0'], 'notify' => '1']);
     check('RSVP saved', $saved['status'] === 302 && strpos($saved['headers'], 'saved=1') !== false);
     check('after replying, RSVP can be closed and stay closed', strpos($get('/guest.php')['body'], 'data-open="1"') === false);
@@ -528,7 +834,7 @@ foreach ($argv as $arg) {
     $resetPage = $fresh($resetPath);
     $fresh($resetPath, ['csrf' => $csrf($resetPage), 'password' => 'lee-new-long-password', 'confirm' => 'lee-new-long-password']);
     $after = $fresh('/admin.php?tab=guests');
-    check('a password reset still asks for their passkey', strpos($after, 'confirm it\'s you with your passkey') !== false && strpos($after, 'Invitations (') === false);
+    check('a password reset still asks for their passkey', strpos($after, 'with your passkey.') !== false && strpos($after, 'Invitations (') === false);
     @unlink($jar4);
     // The owner can switch anyone's feedback emails on the People tab; no one else can.
     $kimId = (int)users_db()->query("SELECT id FROM users WHERE username = 'kim'")->fetchColumn();
@@ -600,7 +906,7 @@ foreach ($argv as $arg) {
     $upload();
     $list = $get('/admin.php?tab=guests')['body'];
     check('CSV upload adds invitations', strpos($list, 'Added 2 invitations.') !== false && strpos($list, 'Uncle Ken') !== false);
-    check('both addresses shown for a couple', (bool)preg_match('#<span class="email-address">ali@example\.com</span>\s*<span class="email-address">jo@example\.com</span>#', $list));
+    check('both addresses shown for a couple', (bool)preg_match('#<span class="email-address" dir="ltr">ali@example\.com</span>\s*<span class="email-address" dir="ltr">jo@example\.com</span>#', $list));
     $upload();
     check('uploading the same file again skips them', strpos($get('/admin.php?tab=guests')['body'], 'Skipped 2 already on the list') !== false);
     $forgedUpload = $get('/admin.php', null, [CURLOPT_POSTFIELDS => ['action' => 'upload_csv', 'csv' => new CURLFile($csvFile, 'text/csv', 'guests.csv')]]);
@@ -627,10 +933,31 @@ foreach ($argv as $arg) {
     $log = (string)@file_get_contents($mailLog);
     check('ticked invitations sent, each address once', substr_count($log, '==== ') === 3 && strpos($log, '<ken@example.com>') !== false);
     check('send message counts resends and no-email guests',
-        strpos($get('/admin.php?tab=guests')['body'], 'Sent 2 invitations (1 of them again). No email address for: Gran No-Email.') !== false);
+        strpos($get('/admin.php?tab=guests')['body'], 'Sent 2 invitations. 1 of them had been sent before. No email address for: Gran No-Email.') !== false);
     $form = $get('/admin.php?tab=guests');
     $get('/admin.php', ['csrf' => $csrf($form['body']), 'action' => 'send_selected']);
     check('nothing ticked, nothing sent', strpos($get('/admin.php?tab=guests')['body'], 'Tick the invitations you want to send first.') !== false);
+    $acct = $get('/admin.php?tab=account');
+    $get('/admin.php', ['csrf' => $csrf($acct['body']), 'action' => 'account_language', 'language' => 'ar']);
+    $arAdmin = $get('/admin.php?tab=guests')['body'];
+    $emailTab = $get('/admin.php?tab=email')['body'];
+    // (Checked by structure: the admin may be in any language here.)
+    check('invitation email: one language picker listing every language, with a next link', strpos($emailTab, 'class="lang-picker"') !== false
+        && substr_count($emailTab, '<li><a href="/admin.php?tab=email') === count(site_languages())
+        && (bool)preg_match('#</details><span class="hint">[^<]*8[^<]*</span><a class="link" href="/admin.php\?tab=email&amp;lang=#', $emailTab)
+        && strpos($emailTab, 'lang-tabs') === false);
+    $updatesTab = $get('/admin.php?tab=updates&template=1')['body'];
+    check('updates: the picker switches translations on the page', strpos($updatesTab, 'data-lang-switch hidden') !== false
+        && strpos($updatesTab, 'href="#tr-es"') !== false && strpos($updatesTab, 'id="tr-es"') !== false);
+    check('admin in Arabic once chosen: right-to-left, Arabic tabs and flash', strpos($arAdmin, '<html lang="ar" dir="rtl">') !== false
+        && strpos($arAdmin, '>الضيوف</a>') !== false && strpos($arAdmin, 'Invitations (') === false);
+    check('admin script phrases come in Arabic', strpos($arAdmin, 'id="phrases"') !== false && strpos($arAdmin, 'تم النسخ') !== false);
+    $get('/admin.php', ['csrf' => $csrf($arAdmin), 'action' => 'account_language', 'language' => '']);
+    check('back to the browser\'s language', strpos($get('/admin.php?tab=guests')['body'], 'Invitations (') !== false);
+    $deLogin = curl_init($base . '/admin.php');
+    curl_setopt_array($deLogin, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Accept-Language: de-DE,de;q=0.9']]);
+    $deBody = (string)curl_exec($deLogin);
+    check('sign-in page follows the browser\'s language', strpos($deBody, 'Benutzername') !== false && strpos($deBody, 'Passwort vergessen?') !== false);
     @unlink($mailLog);
 
     // Tick several invitations and delete them together.
@@ -683,7 +1010,7 @@ foreach ($argv as $arg) {
     $login = $get('/admin.php');
     $get('/admin.php', ['csrf' => $csrf($login['body']), 'username' => 'admin', 'password' => ADMIN_PASSWORD, 'login' => '1']);
     $step = $get('/admin.php?tab=guests')['body'];
-    check('with a passkey, the password alone isn\'t enough', strpos($step, 'confirm it\'s you with your passkey') !== false && strpos($step, 'Invitations (') === false);
+    check('with a passkey, the password alone isn\'t enough', strpos($step, 'with your passkey.') !== false && strpos($step, 'Invitations (') === false);
     [$o, $token, $status] = $options('register', '/admin.php');
     check('half signed in can\'t add a passkey', $status === 403);
     [$o, $token] = $options('confirm', '/admin.php');

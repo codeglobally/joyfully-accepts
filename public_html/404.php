@@ -5,24 +5,19 @@ require is_dir(__DIR__ . '/../private') ? __DIR__ . '/../private/lib.php' : __DI
 
 http_response_code(404);
 
-$quips = [
-    "This page must have RSVP'd no.",
-    'This page wandered off to find the bar.',
-    "We've looked under every table. It isn't here.",
-    'This page is fashionably late. Very late.',
-    'This page got lost on the way to the venue.',
-];
-$quip = $quips[random_int(0, count($quips) - 1)];
 $guest = current_guest();
+set_language($guest ? guest_language($guest) : visitor_language());
+$quips = t_list('notfound.quips');
+$quip = $quips[random_int(0, count($quips) - 1)];
 
-page_header('Page not found · ' . COUPLE_NAMES, has_photo() ? 'photo-bg' : 'centered');
+page_header(t('notfound.title') . ' · ' . COUPLE_NAMES, has_photo() ? 'photo-bg' : 'centered');
 ?>
 <main class="entry lightbox not-found">
   <p class="big-404" aria-hidden="true">4<span class="heart">&#x2665;&#xFE0E;</span>4</p>
-  <h1>Page not found</h1>
+  <h1><?= th('notfound.title') ?></h1>
   <p class="quip"><?= h($quip) ?></p>
-  <p class="hint">The link may have a typo, or the page has moved.</p>
-  <a class="button" href="<?= $guest ? '/guest.php' : '/' ?>"><?= $guest ? 'Back to your invitation' : 'Back to the invitation' ?></a>
+  <p class="hint"><?= th('notfound.hint') ?></p>
+  <a class="button" href="<?= $guest ? '/guest.php' : '/' ?>"><?= th($guest ? 'notfound.back_invitation' : 'notfound.back_home') ?></a>
   <?= lightbox_footer(false) ?>
 </main>
 <?php page_footer();

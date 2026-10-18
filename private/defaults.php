@@ -23,6 +23,14 @@ $defaults = [
     // Show the wedding date on the home page, where anyone can see it. Off by
     // default, so only guests who've entered their code see the date.
     'DATE_ON_HOME_PAGE' => false,
+    // Languages (see private/i18n.php). SITE_LANGUAGE is your own: your content
+    // is written in it, and anything not translated falls back to it.
+    // LANGUAGES are the ones guests and admins can choose. For English only,
+    // set LANGUAGES to ['en'] and the language menu disappears.
+    'SITE_LANGUAGE' => 'en',
+    'LANGUAGES' => ['en', 'es', 'de', 'fr', 'ar', 'zh-Hans', 'zh-Hant', 'mi', 'cy'],
+    // Arabic numbers: 'western' (0-9, understood everywhere) or 'eastern' (٠-٩).
+    'ARABIC_DIGITS' => 'western',
     // Footer line "Made with ♥ in …". Leave empty to hide it. The optional
     // URL turns the place name into a hidden link.
     // Lost the owner's passkey? Set this to true in config.php to sign in with

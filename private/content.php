@@ -16,7 +16,25 @@ function content_db(): PDO
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_by TEXT
         )');
+        // Other languages' versions of a section (the main language is in sections).
+        $pdo->exec('CREATE TABLE IF NOT EXISTS section_translations (
+            section_id INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT \'\',
+            body TEXT NOT NULL DEFAULT \'\',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_by TEXT,
+            PRIMARY KEY (section_id, language)
+        )');
         seed_sections($pdo);
+        // On new and existing sites, and again whenever a language is added:
+        // draft translations for the starter sections, wherever their text
+        // hasn't been changed.
+        $languages = implode(',', site_languages());
+        if ($pdo->query("SELECT value FROM settings WHERE key = 'sections_translated'")->fetchColumn() !== $languages) {
+            translate_starter_sections($pdo);
+            $pdo->prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_translated', ?)")->execute([$languages]);
+        }
         $ready = true;
     }
     return $pdo;
@@ -29,13 +47,56 @@ function seed_sections(PDO $pdo): void
     if ($done) {
         return;
     }
-    $map = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(WEDDING_PLACE);
     $insert = $pdo->prepare('INSERT INTO sections (title, body, visible, position) VALUES (?, ?, ?, ?)');
-    $insert->execute(['The day',
-        "**" . WEDDING_DATE . "**\n\n" . WEDDING_PLACE . "\n[Open in Maps]($map)\n\n"
-        . "Add the timings for the day here, e.g. ceremony at 3pm, followed by drinks, dinner and dancing.", 1, 1]);
-    $insert->execute(['Where to stay', section_templates()['hotels']['body'], 0, 2]);
+    $starters = starter_sections();
+    $insert->execute([$starters['day'][site_language()][0], $starters['day'][site_language()][1], 1, 1]);
+    $insert->execute([$starters['hotels'][site_language()][0], $starters['hotels'][site_language()][1], 0, 2]);
     $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_seeded', '1')");
+}
+
+// The starter sections ("The day" and the Add a section templates) in every
+// language: [key => [code => [title, body]]].
+function starter_sections(): array
+{
+    $map = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(WEDDING_PLACE);
+    $out = [];
+    foreach (site_languages() as $code) {
+        in_language($code, function () use (&$out, $code, $map) {
+            $out['day'][$code] = [t('admin.stpl.day.title'),
+                t('admin.stpl.day.body', ['date' => wedding_date_text(), 'place' => WEDDING_PLACE, 'map' => $map])];
+            foreach (['hotels', 'things', 'travel', 'gifts', 'faq'] as $key) {
+                $out[$key][$code] = [t("admin.stpl.$key.title"), t("admin.stpl.$key.body")];
+            }
+        });
+    }
+    return $out;
+}
+
+// Adds draft translations to sections that are still exactly a starter
+// section in the site's language, for any language they don't have yet
+// ($id: just that one). Sections the couple has reworded are left alone,
+// and existing translations are never replaced.
+function translate_starter_sections(PDO $pdo, ?int $id = null): int
+{
+    $starters = starter_sections();
+    $insert = $pdo->prepare('INSERT OR IGNORE INTO section_translations (section_id, language, title, body, updated_by) VALUES (?, ?, ?, ?, ?)');
+    $sql = 'SELECT * FROM sections' . ($id ? ' WHERE id = ' . (int)$id : '');
+    $added = 0;
+    foreach ($pdo->query($sql)->fetchAll() as $s) {
+        foreach ($starters as $versions) {
+            [$title, $body] = $versions[site_language()];
+            if ($s['title'] === $title && str_replace("\r\n", "\n", trim($s['body'])) === trim($body)) {
+                foreach ($versions as $code => [$trTitle, $trBody]) {
+                    if ($code !== site_language()) {
+                        $insert->execute([$s['id'], $code, $trTitle, $trBody, 'Draft translation']);
+                        $added += $insert->rowCount();
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return $added;
 }
 
 function all_sections(bool $visibleOnly = false): array
@@ -51,27 +112,63 @@ function find_section(int $id): ?array
     return $q->fetch() ?: null;
 }
 
+// --- Translations ----------------------------------------------------------
+// Each section is written in the site's own language; other languages can have
+// their own title and text. Anything left empty shows the main-language version.
+
+function section_translation(int $id, string $language): ?array
+{
+    $q = content_db()->prepare('SELECT * FROM section_translations WHERE section_id = ? AND language = ?');
+    $q->execute([$id, $language]);
+    return $q->fetch() ?: null;
+}
+
+// The languages a section has been translated into.
+function section_languages(int $id): array
+{
+    $q = content_db()->prepare('SELECT language FROM section_translations WHERE section_id = ? ORDER BY language');
+    $q->execute([$id]);
+    return $q->fetchAll(PDO::FETCH_COLUMN);
+}
+
+// Saves a translation; both empty removes it.
+function save_section_translation(int $id, string $language, string $title, string $body, string $by): void
+{
+    if ($title === '' && $body === '') {
+        content_db()->prepare('DELETE FROM section_translations WHERE section_id = ? AND language = ?')->execute([$id, $language]);
+        return;
+    }
+    content_db()->prepare('INSERT OR REPLACE INTO section_translations (section_id, language, title, body, updated_at, updated_by)
+                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)')->execute([$id, $language, $title, $body, $by]);
+}
+
+// Sections as a guest reading $language sees them.
+function localise_sections(array $sections, string $language): array
+{
+    if ($language === site_language()) {
+        return $sections;
+    }
+    foreach ($sections as $i => $s) {
+        $t = section_translation((int)$s['id'], $language);
+        if ($t) {
+            $sections[$i]['title'] = $t['title'] !== '' ? $t['title'] : $s['title'];
+            $sections[$i]['body'] = $t['body'] !== '' ? $t['body'] : $s['body'];
+        }
+    }
+    return $sections;
+}
+
 // Starting points offered by "Add a section".
 function section_templates(): array
 {
-    return [
-        'hotels' => ['label' => 'Where to stay', 'title' => 'Where to stay', 'body' =>
-            "We've found a few places to stay nearby.\n\n"
-            . "## Hotel name\n10 minutes from the venue. Mention our wedding for the group rate.\n[Book a room](https://example.com)\n\n"
-            . "## Another place\nA short description.\n[Website](https://example.com)"],
-        'things' => ['label' => 'Things to do', 'title' => 'Things to do', 'body' =>
-            "Making a weekend of it? Some of our favourite things nearby:\n\n"
-            . "- **A beach or walk** - why you'll love it\n- **A pub or restaurant** - what to order\n- **A day out** - good for families"],
-        'travel' => ['label' => 'Getting there', 'title' => 'Getting there', 'body' =>
-            "## By car\nThere's parking at the venue.\n\n"
-            . "## By train\nThe nearest station is ... We'll arrange taxis from there.\n\n"
-            . "## Taxis\nLocal firms: ..."],
-        'gifts' => ['label' => 'Gifts', 'title' => 'Gifts', 'body' =>
-            "Having you there is the best gift. If you'd like to give something, ..."],
-        'faq' => ['label' => 'FAQs', 'title' => 'Questions', 'body' =>
-            "## Is there a dress code?\n...\n\n## Can I bring children?\n...\n\n## When should I reply by?\n..."],
-        'blank' => ['label' => 'Blank section', 'title' => '', 'body' => ''],
-    ];
+    // Labels in the admin's language; the starting text in the site's, as it
+    // becomes the section's main version.
+    $out = [];
+    foreach (['hotels', 'things', 'travel', 'gifts', 'faq', 'blank'] as $key) {
+        $out[$key] = ['label' => t("admin.stpl.$key.label")] + ($key === 'blank' ? ['title' => '', 'body' => ''] : in_language(site_language(),
+            fn() => ['title' => t("admin.stpl.$key.title"), 'body' => t("admin.stpl.$key.body")]));
+    }
+    return $out;
 }
 
 // Markdown subset, safe by construction: everything is HTML-escaped first,

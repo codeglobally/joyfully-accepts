@@ -63,6 +63,15 @@ const MAX_FAILED_ATTEMPTS = 10;
 // who've entered their code. Set this to true to show the date there too.
 // const DATE_ON_HOME_PAGE = true;
 
+// Languages. Guests read the site and their emails in their own language,
+// from their browser or the menu in the footer; admins choose theirs on "Your
+// account". SITE_LANGUAGE is yours: your content is written in it, and
+// anything you haven't translated shows in it. Codes: en, es, de, fr, ar,
+// zh-Hans (Simplified Chinese), zh-Hant (Traditional Chinese).
+// const SITE_LANGUAGE = 'en';
+// const LANGUAGES = ['en', 'es', 'de', 'fr', 'ar', 'zh-Hans', 'zh-Hant', 'mi', 'cy'];   // ['en'] for English only
+// const ARABIC_DIGITS = 'eastern';   // ٠-٩ instead of 0-9 in Arabic
+
 // Footer line "Made with ♥ in …" (hidden if empty), optionally a hidden link.
 // const MADE_IN = 'Ljubljana';
 // const MADE_IN_URL = 'https://en.wikipedia.org/wiki/Ljubljana';

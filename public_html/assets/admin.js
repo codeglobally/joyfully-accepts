@@ -1,3 +1,20 @@
+// Phrases in the admin's language, from the page (see js_phrases()). Plural
+// phrases come as their forms and are picked with the browser's plural rules.
+var PHRASES = (function () {
+  var el = document.getElementById('phrases');
+  try { return el ? JSON.parse(el.dataset.phrases) : {}; } catch (e) { return {}; }
+})();
+function phrase(key, vars) {
+  var text = PHRASES[key] || key;
+  vars = vars || {};
+  if (typeof text === 'object') {
+    var form = 'other';
+    try { form = new Intl.PluralRules(document.documentElement.lang).select(vars.count || 0); } catch (e) {}
+    text = text[form] || text.other;
+  }
+  return text.replace(/\{(\w+)\}/g, function (m, name) { return name in vars ? vars[name] : m; });
+}
+
 // Small forms that save as soon as a box is ticked (data-autosubmit), such as
 // the People tab's feedback-email switches. Their Save buttons are only for
 // browsers without JavaScript.
@@ -6,8 +23,8 @@ document.querySelectorAll('form[data-autosubmit]').forEach(function (form) {
   form.addEventListener('change', function () { form.submit(); });
 });
 
-// Account menu (top right): close it with Escape or by clicking elsewhere.
-document.querySelectorAll('details.account-menu').forEach(function (menu) {
+// Account menu (top right) and language pickers: close with Escape or by clicking elsewhere.
+document.querySelectorAll('details.account-menu, details.lang-menu').forEach(function (menu) {
   document.addEventListener('click', function (e) {
     if (menu.open && !menu.contains(e.target)) menu.open = false;
   });
@@ -22,8 +39,8 @@ document.querySelectorAll('details.account-menu').forEach(function (menu) {
 document.querySelectorAll('[data-copy]').forEach(function (btn) {
   btn.addEventListener('click', function () {
     navigator.clipboard.writeText(btn.dataset.copy).then(function () {
-      btn.textContent = 'Copied';
-      setTimeout(function () { btn.textContent = 'Copy link'; }, 1500);
+      btn.textContent = phrase('admin.copied');
+      setTimeout(function () { btn.textContent = phrase('admin.copy_link'); }, 1500);
     });
   });
 });
@@ -53,7 +70,6 @@ document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
   var del = form.querySelector('button[value="delete_selected"]');
   var send = form.querySelector('button[value="send_selected"]');
   var sendLabel = send.querySelector('.bulk-send-label');
-  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
   function update() {
     var ticked = boxes.filter(function (b) { return b.checked; });
@@ -62,21 +78,21 @@ document.querySelectorAll('button[data-confirm]').forEach(function (btn) {
     var again = sendable.filter(function (b) { return b.dataset.sent === '1'; }).length;
     var skipped = n - sendable.length;
     var tooMany = n > 950;   // PHP only receives about 1,000 form fields at once
-    count.textContent = tooMany ? n + ' selected: too many for one go, so untick some and do it in two goes.'
-      : n ? n + ' selected' : 'Tick invitations to send or delete several at once.';
+    count.textContent = tooMany ? phrase('admin.bulk.js_too_many', { count: n })
+      : n ? phrase('admin.bulk.js_selected', { count: n }) : phrase('admin.bulk.hint');
 
     del.disabled = n === 0 || tooMany;
-    del.dataset.confirm = 'Delete ' + (n === 1 ? 'this invitation' : 'these ' + n + ' invitations') + "? This can't be undone.";
+    del.dataset.confirm = phrase('admin.bulk.js_confirm_delete', { count: n });
 
     send.disabled = sendable.length === 0 || tooMany;
-    sendLabel.textContent = again === 0 ? 'Send selected' : again === sendable.length ? 'Resend selected' : 'Send / resend selected';
-    var msg = 'Send the invitation to ' + plural(sendable.length, 'guest') + '?';
+    sendLabel.textContent = phrase(again === 0 ? 'admin.bulk.send' : again === sendable.length ? 'admin.bulk.resend' : 'admin.bulk.send_resend');
+    var msg = phrase('admin.bulk.js_confirm_send', { count: sendable.length });
     if (again && again === sendable.length) {
-      msg += again === 1 ? " They've had it before, so they'll get it again." : " They've all had it before, so they'll get it again.";
+      msg += ' ' + phrase(again === 1 ? 'admin.bulk.js_again_one' : 'admin.bulk.js_again_all');
     } else if (again) {
-      msg += ' ' + again + ' of them ' + (again === 1 ? 'has' : 'have') + ' had it before and will get it again.';
+      msg += ' ' + phrase('admin.bulk.js_again_some', { count: again });
     }
-    if (skipped) msg += ' ' + plural(skipped, 'ticked invitation') + ' with no email address will be skipped.';
+    if (skipped) msg += ' ' + phrase('admin.bulk.js_skipped', { count: skipped });
     send.dataset.confirm = msg;
     all.checked = n > 0 && n === boxes.length;
     all.indeterminate = n > 0 && n < boxes.length;
@@ -151,12 +167,12 @@ document.querySelectorAll('[data-md]').forEach(function (btn) {
     }
 
     switch (btn.dataset.md) {
-      case 'bold': wrap('**', 'bold text'); break;
-      case 'italic': wrap('*', 'italic text'); break;
+      case 'bold': wrap('**', phrase('admin.md.js_bold')); break;
+      case 'italic': wrap('*', phrase('admin.md.js_italic')); break;
       case 'heading': prefixLines('## '); break;
       case 'list': prefixLines('- '); break;
       case 'link':
-        var label = sel || 'link text';
+        var label = sel || phrase('admin.md.js_link');
         insert = '[' + label + '](https://)';
         selStart = start + label.length + 3;           // inside the ( )
         selEnd = selStart + 'https://'.length;
@@ -203,3 +219,53 @@ document.querySelectorAll('[data-md-size]').forEach(function (menu) {
     el.addEventListener('mouseleave', function () { mark(null); });
   });
 })();
+
+// Updates tab: every translation is in the one form, so the language picker
+// shows one at a time instead of loading a page. Without JavaScript they're a
+// list of collapsible rows instead.
+document.querySelectorAll('[data-lang-switch]').forEach(function (picker) {
+  var box = picker.closest('details.translations');
+  var items = Array.prototype.slice.call(box.querySelectorAll('details.translation[data-lang]'));
+  var menu = picker.querySelector('details.lang-menu');
+  var links = Array.prototype.slice.call(picker.querySelectorAll('.lang-menu-list a[data-lang]'));
+  var next = picker.querySelector(':scope > a[data-lang]');
+  var arrow = document.documentElement.dir === 'rtl' ? ' \u2190' : ' \u2192';
+  function show(code) {
+    items.forEach(function (item) {
+      item.hidden = item.dataset.lang !== code;
+      item.open = true;
+    });
+    links.forEach(function (a) {
+      if (a.dataset.lang === code) {
+        a.setAttribute('aria-current', 'page');
+        picker.querySelector('[data-current]').textContent = a.firstElementChild.textContent;
+        picker.querySelector('[data-current]').lang = code;
+        var status = picker.querySelector('[data-current-status]');
+        status.textContent = a.lastElementChild.textContent;
+        status.className = a.lastElementChild.className;
+      } else {
+        a.removeAttribute('aria-current');
+      }
+    });
+    // "Next untranslated": the next one after this that hasn't got a version.
+    if (next) {
+      var at = links.findIndex(function (a) { return a.dataset.lang === code; });
+      var order = links.slice(at + 1).concat(links.slice(0, at));
+      var todo = order.filter(function (a) { return a.lastElementChild.classList.contains('todo'); })[0];
+      next.hidden = !todo;
+      if (todo) { next.dataset.lang = todo.dataset.lang; next.href = todo.getAttribute('href'); }
+    }
+    menu.open = false;
+  }
+  picker.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-lang]');
+    if (!a) return;
+    e.preventDefault();
+    show(a.dataset.lang);
+    var field = box.querySelector('details.translation[data-lang="' + a.dataset.lang + '"] input');
+    if (field) field.focus();
+  });
+  box.dataset.switching = '';
+  picker.hidden = false;
+  show(links[0].dataset.lang);
+});

@@ -22,37 +22,98 @@ function notify_db(): PDO
             sent_by TEXT,
             sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )');
+        $columns = $pdo->query('PRAGMA table_info(email_templates)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('translations', $columns, true)) {
+            // Other languages' versions: {"es": {"subject": …, "body": …}, …}
+            $pdo->exec('ALTER TABLE email_templates ADD COLUMN translations TEXT');
+        }
         if (!$pdo->query('SELECT COUNT(*) FROM email_templates')->fetchColumn()
             && !$pdo->query("SELECT value FROM settings WHERE key = 'templates_seeded'")->fetchColumn()) {
-            $insert = $pdo->prepare('INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)');
+            $insert = $pdo->prepare('INSERT INTO email_templates (name, subject, body, translations) VALUES (?, ?, ?, ?)');
             foreach (starter_templates() as $t) {
-                $insert->execute($t);
+                $insert->execute([$t['name'], $t['subject'], $t['body'], json_encode($t['translations'], JSON_UNESCAPED_UNICODE)]);
             }
             $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('templates_seeded', '1')");
+        }
+        // Sites from before translations, and again whenever a language is
+        // added: the starter templates they haven't changed get translations.
+        $languages = implode(',', site_languages());
+        if ($pdo->query("SELECT value FROM settings WHERE key = 'templates_translated'")->fetchColumn() !== $languages) {
+            translate_starter_templates($pdo);
+            $pdo->prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('templates_translated', ?)")->execute([$languages]);
         }
         $ready = true;
     }
     return $pdo;
 }
 
+// Gives starter templates whose main text hasn't been changed the starters'
+// translations for any language they don't have yet. Translations already
+// there (including ones the couple wrote) are kept.
+function translate_starter_templates(PDO $pdo): void
+{
+    $update = $pdo->prepare('UPDATE email_templates SET translations = ? WHERE id = ?');
+    foreach ($pdo->query('SELECT * FROM email_templates')->fetchAll() as $row) {
+        foreach (starter_templates() as $t) {
+            if ($row['subject'] === $t['subject'] && str_replace("\r\n", "\n", $row['body']) === $t['body']) {
+                $have = template_translations($row);
+                $merged = $have + $t['translations'];
+                if (count($merged) > count($have)) {
+                    $update->execute([json_encode($merged, JSON_UNESCAPED_UNICODE), $row['id']]);
+                }
+            }
+        }
+    }
+}
+
+// The starter templates in the site's language, each with its translations.
 function starter_templates(): array
 {
-    $sign = "\n\nWith love,\n" . COUPLE_NAMES;
-    return [
-        ['Reminder to reply', 'Will you be joining us? ' . COUPLE_NAMES,
-            "Dear {name},\n\nJust a gentle reminder to let us know if you can make it to our wedding.\n\n{link}\n\n"
-            . "Your invitation code is {code}." . $sign],
-        ['Hotels and travel', 'Where to stay for our wedding',
-            "Dear {name},\n\nWe've added hotel and travel details to the wedding website.\n\n{link}\n\n"
-            . "Your invitation code is {code}, in case you need it." . $sign],
-        ['Timings for the day', 'Timings for the big day',
-            "Dear {name},\n\nThe timings for the day are now on the wedding website.\n\n{link}\n\n"
-            . "Your invitation code is {code}." . $sign],
-        ['Not sure yet nudge', 'Any news? ' . COUPLE_NAMES,
-            "Dear {name},\n\nYou said you'd let us know if you can come. No rush, but when you know, you can update your reply here:\n\n{link}\n\n"
-            . "Your invitation code is {code}." . $sign],
-        ['Blank', '', "Dear {name},\n\n\n\n{link}\n\nYour invitation code is {code}." . $sign],
-    ];
+    $one = function (string $key, string $language): array {
+        return in_language($language, fn() => [
+            'name' => t("$key.name"),
+            'subject' => t("$key.subject", ['couple' => COUPLE_NAMES]),
+            'body' => t("$key.body", ['couple' => COUPLE_NAMES]),
+        ]);
+    };
+    $out = [];
+    foreach (['tpl.reminder', 'tpl.hotels', 'tpl.timings', 'tpl.nudge', 'tpl.blank'] as $key) {
+        $t = $one($key, site_language());
+        $t['translations'] = [];
+        foreach (site_languages() as $code) {
+            if ($code !== site_language()) {
+                $tr = $one($key, $code);
+                $t['translations'][$code] = ['subject' => $tr['subject'], 'body' => $tr['body']];
+            }
+        }
+        $out[] = $t;
+    }
+    return $out;
+}
+
+// A template's other-language versions: [code => ['subject' => …, 'body' => …]].
+function template_translations(?array $template): array
+{
+    $tr = json_decode((string)($template['translations'] ?? ''), true);
+    return is_array($tr) ? clean_translations($tr) : [];
+}
+
+// Translations as sent from a form or stored: only offered languages, only
+// text, one-line subjects, and languages with nothing in them dropped.
+function clean_translations($raw): array
+{
+    $out = [];
+    foreach ((array)$raw as $code => $t) {
+        if (!valid_language((string)$code) || $code === site_language() || !is_array($t)) {
+            continue;
+        }
+        $subject = trim(str_replace(["\r", "\n"], ' ', is_string($t['subject'] ?? null) ? $t['subject'] : ''));
+        $body = trim(str_replace("\r\n", "\n", is_string($t['body'] ?? null) ? $t['body'] : ''));
+        if ($subject !== '' || $body !== '') {
+            $out[$code] = ['subject' => $subject, 'body' => $body];
+        }
+    }
+    return $out;
 }
 
 function all_templates(): array
@@ -71,13 +132,11 @@ function find_template(int $id): ?array
 // address, are always left out.
 function audiences(): array
 {
-    return [
-        'all' => 'Everyone',
-        'coming' => 'Coming',
-        'coming_or_maybe' => 'Coming or not sure yet',
-        'no_reply' => 'Not replied yet',
-        'maybe' => 'Not sure yet',
-    ];
+    $out = [];
+    foreach (['all', 'coming', 'coming_or_maybe', 'no_reply', 'maybe'] as $key) {
+        $out[$key] = t('admin.aud.' . $key);
+    }
+    return $out;
 }
 
 function audience_guests(string $audience): array
@@ -100,24 +159,36 @@ function unsubscribe_link(string $code): string
     return SITE_URL . '/unsubscribe.php?code=' . urlencode($code);
 }
 
-// Renders an update for one guest: [subject, text, html, extra headers].
+// Renders an update for one guest: [subject, text, html, extra headers], in
+// the current language (render inside in_language()).
 function render_update(array $guest, string $subject, string $body, string $imageSrc = 'cid:' . EMAIL_IMAGE_CID): array
 {
     $unsub = unsubscribe_link($guest['code']);
-    $footerHtml = '<br><br>You&rsquo;re getting this because you&rsquo;re invited to our wedding. '
-        . '<a href="' . h($unsub) . '" style="color:#8a6552">Stop these updates</a>';
-    $footerText = "You're getting this because you're invited to our wedding. Stop these updates: $unsub";
+    $footerHtml = '<br><br>' . th('email.updates_reason') . ' '
+        . '<a href="' . h($unsub) . '" style="color:#8a6552">' . th('email.stop_updates') . '</a>';
+    $footerText = t('email.updates_reason') . ' ' . t('email.stop_updates') . ": $unsub";
     [$subj, $text, $html] = render_email($guest, $subject, $body, $imageSrc,
-        'News from ' . h(COUPLE_NAMES), $footerHtml, $footerText);
+        th('email.news_from', ['couple' => COUPLE_NAMES]), $footerHtml, $footerText);
     // Lets Gmail, Apple Mail etc. show their own one-click unsubscribe button.
     $headers = ['List-Unsubscribe: <' . $unsub . '>', 'List-Unsubscribe-Post: List-Unsubscribe=One-Click'];
     return [$subj, $text, $html, $headers];
 }
 
-// Sends the update to each of the guest's addresses; true only if every one went.
-function send_update(array $guest, string $subject, string $body): bool
+// The version of an update for one language: [subject, text], from
+// $translations where written, otherwise the main subject and text.
+function update_version(string $language, string $subject, string $body, array $translations): array
 {
-    [$subj, $text, $html, $headers] = render_update($guest, $subject, $body);
+    $mine = $translations[$language] ?? [];
+    return [($mine['subject'] ?? '') !== '' ? $mine['subject'] : $subject, ($mine['body'] ?? '') !== '' ? $mine['body'] : $body];
+}
+
+// Sends the update to each of the guest's addresses, in their language. True
+// only if every address got it.
+function send_update(array $guest, string $subject, string $body, array $translations = []): bool
+{
+    $language = guest_email_language($guest);
+    [$subject, $body] = update_version($language, $subject, $body, $translations);
+    [$subj, $text, $html, $headers] = in_language($language, fn() => render_update($guest, $subject, $body));
     $to = sendable_emails($guest['email']);
     $sent = 0;
     foreach ($to as $address) {

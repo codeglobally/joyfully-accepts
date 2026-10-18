@@ -12,7 +12,7 @@ function wedding_day(): ?DateTimeImmutable
 
 function calendar_title(): string
 {
-    return stripos(COUPLE_NAMES, 'wedding') !== false ? COUPLE_NAMES : COUPLE_NAMES . "'s wedding";
+    return stripos(COUPLE_NAMES, 'wedding') !== false ? COUPLE_NAMES : t('cal.title', ['couple' => COUPLE_NAMES]);
 }
 
 // Escaping and 75-octet line folding as the iCalendar standard requires.
@@ -48,12 +48,12 @@ function wedding_ics(string $personalLink): string
         'DTEND;VALUE=DATE:' . $day->modify('+1 day')->format('Ymd'),
         'SUMMARY:' . ics_text(calendar_title()),
         'LOCATION:' . ics_text(WEDDING_PLACE),
-        'DESCRIPTION:' . ics_text("Details, timings and your RSVP:\n" . $personalLink),
+        'DESCRIPTION:' . ics_text(t('cal.details') . "\n" . $personalLink),
         'URL:' . $personalLink,
         'TRANSP:OPAQUE',
         // Reminders: 9am a week before, and 9am the day before.
-        'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' . ics_text(calendar_title() . ' is in a week'), 'TRIGGER:-P6DT15H', 'END:VALARM',
-        'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' . ics_text(calendar_title() . ' is tomorrow'), 'TRIGGER:-PT15H', 'END:VALARM',
+        'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' . ics_text(t('cal.in_a_week', ['title' => calendar_title()])), 'TRIGGER:-P6DT15H', 'END:VALARM',
+        'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' . ics_text(t('cal.tomorrow', ['title' => calendar_title()])), 'TRIGGER:-PT15H', 'END:VALARM',
         'END:VEVENT', 'END:VCALENDAR',
     ];
     return implode('', array_map('ics_line', $lines));
@@ -69,7 +69,7 @@ function google_calendar_link(): string
         'text' => calendar_title(),
         'dates' => $day->format('Ymd') . '/' . $day->modify('+1 day')->format('Ymd'),
         'location' => WEDDING_PLACE,
-        'details' => 'Details and RSVP: ' . SITE_URL,
+        'details' => t('cal.details_short', ['link' => SITE_URL]),
     ]);
 }
 
@@ -84,6 +84,6 @@ function outlook_calendar_link(): string
         'enddt' => $day->modify('+1 day')->format('Y-m-d'),
         'allday' => 'true',
         'location' => WEDDING_PLACE,
-        'body' => 'Details and RSVP: ' . SITE_URL,
+        'body' => t('cal.details_short', ['link' => SITE_URL]),
     ]);
 }

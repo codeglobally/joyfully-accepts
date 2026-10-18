@@ -2,23 +2,20 @@
 // Invitation emails. The template lives in the settings table and is
 // filled in per guest; {name}, {link} and {code} are replaced.
 
-function mail_settings(): array
+// The invitation email's settings, with the subject and text for guests
+// reading $language (the current language if not given).
+function mail_settings(?string $language = null): array
 {
+    $language = $language ?? current_language();
     $host = preg_replace('/^www\./', '', (string)parse_url(SITE_URL, PHP_URL_HOST));
-    $date = preg_replace('/^\w+day /', '', WEDDING_DATE);
-    return [
+    return in_language($language, fn() => [
         'from_name' => setting('mail_from_name', COUPLE_NAMES),
         'from'      => setting('mail_from', 'invitations@' . $host),
         'reply_to'  => setting('mail_reply_to'),
-        'subject'   => setting('mail_subject', "You're invited: " . COUPLE_NAMES . ', ' . $date),
-        'body'      => setting('mail_body', "Dear {name},\n\n"
-            . "We're getting married, and we'd love you to be there.\n\n"
-            . "Please let us know if you can come by visiting our wedding website:\n\n"
-            . "{link}\n\n"
-            . "Your invitation code is {code}, in case you need to type it in.\n\n"
-            . "We'll add details about the day, hotels and travel to the site over the coming months.\n\n"
-            . "With love,\n" . COUPLE_NAMES),
-    ];
+        'subject'   => own_wording('mail_subject', $language) ?: default_wording('mail_subject'),
+        'body'      => own_wording('mail_body', $language) ?: default_wording('mail_body'),
+        'language'  => $language,
+    ]);
 }
 
 function valid_email(?string $email): bool
@@ -71,13 +68,30 @@ function render_invite(array $guest, array $settings, string $imageSrc = 'cid:' 
     return render_email($guest, $settings['subject'], $settings['body'], $imageSrc, h(tagline()));
 }
 
+// The font stack for an email in the current language. Latin text keeps
+// Helvetica; Arabic and Chinese fall through to their own fonts.
+function email_font(): string
+{
+    $scriptFonts = [
+        'ar' => "'SF Arabic','Geeza Pro','Segoe UI',Tahoma,",
+        'zh-Hans' => "'PingFang SC','Microsoft YaHei',",
+        'zh-Hant' => "'PingFang TC','Microsoft JhengHei',",
+    ];
+    return "'Helvetica Neue',Helvetica,Arial," . ($scriptFonts[current_language()] ?? '') . 'sans-serif';
+}
+
 // The branded email used for invitations and updates. $eyebrow is the small
 // heading above the names (already HTML). $footerHtml / $footerText are
 // added at the bottom, e.g. an unsubscribe link.
 function render_email(array $guest, string $subjectTemplate, string $bodyTemplate,
-                      string $imageSrc = 'cid:' . EMAIL_IMAGE_CID, string $eyebrow = 'You&rsquo;re invited',
+                      string $imageSrc = 'cid:' . EMAIL_IMAGE_CID, ?string $eyebrow = null,
                       string $footerHtml = '', string $footerText = ''): array
 {
+    // Built in the current language: render emails inside in_language().
+    $eyebrow = $eyebrow ?? h(tagline());
+    $rtl = is_rtl();
+    $dir = $rtl ? 'rtl' : 'ltr';
+    $spacing = $rtl ? 'normal' : '0.2em';   // spacing letters apart breaks joined-up Arabic
     $settings = ['subject' => $subjectTemplate, 'body' => $bodyTemplate];
     if (email_photo_url() === '') {
         $imageSrc = '';   // no photo configured
@@ -88,11 +102,11 @@ function render_email(array $guest, string $subjectTemplate, string $bodyTemplat
     $subject = str_replace(["\r", "\n"], ' ', strtr($settings['subject'], $vars));
     $text = strtr($settings['body'], $vars) . ($footerText !== '' ? "\n\n--\n" . $footerText : '');
 
-    $font = "'Helvetica Neue',Helvetica,Arial,sans-serif";
+    $font = email_font();
     $button = '</p><table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px">'
         . '<tr><td style="background:#c2410c;border-radius:8px">'
         . '<a href="' . h($link) . '" style="display:inline-block;padding:15px 32px;font:500 16px ' . $font
-        . ';color:#ffffff;text-decoration:none;border-radius:8px">View your invitation</a>'
+        . ';color:#ffffff;text-decoration:none;border-radius:8px">' . th('email.view_invitation') . '</a>'
         . '</td></tr></table><p style="margin:0 0 16px">';
     $code = '<span style="display:inline-block;padding:2px 10px;background:#fff7f1;border:1px solid #f3dccb;'
         . 'border-radius:6px;font-weight:600;letter-spacing:0.12em;color:#2a211c">' . h($guest['code']) . '</span>';
@@ -108,7 +122,7 @@ function render_email(array $guest, string $subjectTemplate, string $bodyTemplat
     }
     $body = str_replace('<p style="margin:0 0 16px"></p>', '', $body);
 
-    $html = '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    $html = '<!doctype html><html lang="' . h(current_language()) . '" dir="' . $dir . '"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<meta name="color-scheme" content="light only"><title>' . h($subject) . '</title></head>'
         . '<body style="margin:0;padding:0;background:#fff7f1">'
@@ -121,18 +135,18 @@ function render_email(array $guest, string $subjectTemplate, string $bodyTemplat
         . 'style="display:block;width:100%;max-width:600px;height:auto;border:0"></td></tr>')
         // Names, date and venue
         . '<tr><td align="center" style="padding:32px 28px 8px;font-family:' . $font . ';color:#2a211c">'
-        . '<p style="margin:0 0 8px;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#8a6552">' . $eyebrow . '</p>'
+        . '<p style="margin:0 0 8px;font-size:' . ($rtl ? '14' : '12') . 'px;letter-spacing:' . $spacing . ';text-transform:uppercase;color:#8a6552">' . $eyebrow . '</p>'
         . '<p style="margin:0;font-size:34px;line-height:1.15;font-weight:300;letter-spacing:-0.02em">' . h(COUPLE_NAMES) . '</p>'
-        . '<p style="margin:12px 0 0;font-size:16px;line-height:1.5;color:#8a6552">' . h(WEDDING_DATE) . '<br>' . place_html() . '</p>'
+        . '<p style="margin:12px 0 0;font-size:16px;line-height:1.5;color:#8a6552">' . h(wedding_date_text()) . '<br>' . place_html() . '</p>'
         . '</td></tr>'
         . '<tr><td style="padding:0 28px"><div style="height:1px;background:#f3dccb;margin:24px 0"></div></td></tr>'
         // Message
-        . '<tr><td style="padding:0 28px 16px;font:16px/1.6 ' . $font . ';color:#2a211c">' . $body . '</td></tr>'
+        . '<tr><td dir="' . $dir . '" style="padding:0 28px 16px;font:' . ($rtl ? '17px/1.8 ' : '16px/1.6 ') . $font . ';color:#2a211c;text-align:' . ($rtl ? 'right' : 'left') . '">' . $body . '</td></tr>'
         . '</table>'
         // Footer
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">'
         . '<tr><td style="padding:20px 28px;font:12px/1.6 ' . $font . ';color:#8a6552;text-align:center">'
-        . 'If the button doesn&rsquo;t work, copy this link into your browser:<br>'
+        . th('email.link_help') . '<br>'
         . '<a href="' . h($link) . '" style="color:#8a6552;word-break:break-all">' . h($link) . '</a>'
         . $footerHtml
         . '</td></tr></table>'
@@ -211,9 +225,15 @@ function send_email(string $to, string $toName, string $subject, string $text, s
 
 // Sends the invitation to each of the guest's addresses. Returns true only if
 // every one went; it counts as sent (invited_at) once any of them has.
+// In the guest's language (their saved one, or the site's), with the subject
+// and text written for that language.
 function send_invite(array $guest, array $settings): bool
 {
-    [$subject, $text, $html] = render_invite($guest, $settings);
+    $language = valid_language($guest['language'] ?? null) ? $guest['language'] : site_language();
+    $local = mail_settings($language);
+    $settings['subject'] = $local['subject'];
+    $settings['body'] = $local['body'];
+    [$subject, $text, $html] = in_language($language, fn() => render_invite($guest, $settings));
     $to = sendable_emails($guest['email'] ?? null);
     $sent = 0;
     foreach ($to as $address) {
@@ -236,28 +256,35 @@ function send_feedback_notice(array $guest, string $message): int
     }
     $guestEmail = sendable_emails($guest['email'] ?? null)[0] ?? '';
     $settings['reply_to'] = $guestEmail;
-    $from = (string)$guest['name'];
-    $inbox = SITE_URL . '/admin.php?tab=feedback';
-    $account = SITE_URL . '/admin.php?tab=account';
-    $subject = 'New message from ' . $from;
-    $replyNote = $guestEmail !== '' ? 'Reply to this email to answer them directly.' : 'Their invitation has no email address, so you can\'t reply by email.';
-    $text = "$from sent a message through your wedding website:\n\n" . $message . "\n\n"
-        . "$replyNote\nSee all messages: $inbox\n\n--\n"
-        . "You're getting this because you turned on feedback emails. Turn them off: $account";
-    $font = "'Helvetica Neue',Helvetica,Arial,sans-serif";
-    $html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' . h($subject) . '</title></head>'
-        . '<body style="margin:0;padding:24px;background:#faf7f4;font:16px/1.5 ' . $font . ';color:#2a211c">'
-        . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #eadfd6;border-radius:12px;padding:24px">'
-        . '<p style="margin:0 0 12px;color:#8a6552;font-size:13px;letter-spacing:0.12em;text-transform:uppercase">New message</p>'
-        . '<p style="margin:0 0 16px"><strong>' . h($from) . '</strong> sent a message through your wedding website:</p>'
-        . '<blockquote style="margin:0 0 20px;padding:12px 16px;background:#fff7f1;border-left:3px solid #c2410c;border-radius:4px">'
-        . nl2br(h($message)) . '</blockquote>'
-        . '<p style="margin:0 0 16px">' . h($replyNote) . ' <a href="' . h($inbox) . '" style="color:#c2410c">See all messages</a></p>'
-        . '<p style="margin:24px 0 0;font-size:13px;color:#8a6552">You&rsquo;re getting this because you turned on feedback emails. '
-        . '<a href="' . h($account) . '" style="color:#8a6552">Turn them off</a></p></div></body></html>';
     $sent = 0;
     foreach (feedback_recipients() as $person) {
+        [$subject, $text, $html] = in_language($person['language'],
+            fn() => render_feedback_notice((string)$guest['name'], $message, $guestEmail !== ''));
         $sent += send_email($person['email'], $person['name'], $subject, $text, $html, $settings) ? 1 : 0;
     }
     return $sent;
+}
+
+// The feedback notice in the current language: [subject, text, html].
+function render_feedback_notice(string $from, string $message, bool $canReply): array
+{
+    $inbox = SITE_URL . '/admin.php?tab=feedback';
+    $account = SITE_URL . '/admin.php?tab=account';
+    $subject = t('admin_mail.feedback_subject', ['name' => $from]);
+    $replyNote = t($canReply ? 'admin_mail.reply_direct' : 'admin_mail.no_reply');
+    $text = t('admin_mail.feedback_intro', ['name' => $from]) . "\n\n" . $message . "\n\n"
+        . "$replyNote\n" . t('admin_mail.see_all') . ": $inbox\n\n--\n"
+        . t('admin_mail.feedback_reason') . ' ' . t('admin_mail.turn_off') . ": $account";
+    $rtl = is_rtl();
+    $html = '<!doctype html><html lang="' . h(current_language()) . '" dir="' . ($rtl ? 'rtl' : 'ltr') . '"><head><meta charset="utf-8"><title>' . h($subject) . '</title></head>'
+        . '<body style="margin:0;padding:24px;background:#faf7f4;font:16px/1.5 ' . email_font() . ';color:#2a211c">'
+        . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #eadfd6;border-radius:12px;padding:24px">'
+        . '<p style="margin:0 0 12px;color:#8a6552;font-size:13px;' . ($rtl ? '' : 'letter-spacing:0.12em;text-transform:uppercase') . '">' . th('admin_mail.feedback_eyebrow') . '</p>'
+        . '<p style="margin:0 0 16px">' . t_html('admin_mail.feedback_intro', ['name' => '<strong>' . h($from) . '</strong>']) . '</p>'
+        . '<blockquote style="margin:0 0 20px;padding:12px 16px;background:#fff7f1;border-' . ($rtl ? 'right' : 'left') . ':3px solid #c2410c;border-radius:4px" dir="auto">'
+        . nl2br(h($message)) . '</blockquote>'
+        . '<p style="margin:0 0 16px">' . h($replyNote) . ' <a href="' . h($inbox) . '" style="color:#c2410c">' . th('admin_mail.see_all') . '</a></p>'
+        . '<p style="margin:24px 0 0;font-size:13px;color:#8a6552">' . th('admin_mail.feedback_reason') . ' '
+        . '<a href="' . h($account) . '" style="color:#8a6552">' . th('admin_mail.turn_off') . '</a></p></div></body></html>';
+    return [$subject, $text, $html];
 }

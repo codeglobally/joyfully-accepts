@@ -1,6 +1,6 @@
 # Joyfully Accepts
 
-[![Version](https://img.shields.io/badge/version-2.5.0-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
+[![Version](https://img.shields.io/badge/version-2.7.4-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
 [![Tests](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml/badge.svg)](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml)
 [![Security](https://github.com/codeglobally/joyfully-accepts/actions/workflows/security.yml/badge.svg)](SECURITY.md)
 [![WCAG 2.1 AA](https://img.shields.io/badge/WCAG_2.1-AA-2e7d32)](#accessibility)
@@ -8,6 +8,10 @@
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
 A small, self-hosted wedding website with private invitations and RSVPs. Each guest gets an 8-character code (or a link with it built in). Entering it opens their own invitation page, where they reply, choose dietary requirements and see the details you add. You run everything from a simple admin area.
+
+**Fully localised, for guests and admins alike.** Every guest page, every email and the whole admin area come in nine languages, and your own wording (guest-page sections, the invitation, update emails) can have a version in each. Guests see their own language automatically, and each admin picks theirs.
+
+<img src="https://flagcdn.com/w40/gb.png" width="20" alt=""> English &nbsp; <img src="https://flagcdn.com/w40/es.png" width="20" alt=""> Español &nbsp; <img src="https://flagcdn.com/w40/de.png" width="20" alt=""> Deutsch &nbsp; <img src="https://flagcdn.com/w40/fr.png" width="20" alt=""> Français &nbsp; <img src="https://flagcdn.com/w40/sa.png" width="20" alt=""> العربية &nbsp; <img src="https://flagcdn.com/w40/cn.png" width="20" alt=""> 简体中文 &nbsp; <img src="https://flagcdn.com/w40/tw.png" width="20" alt=""> 繁體中文 &nbsp; <img src="https://flagcdn.com/w40/nz.png" width="20" alt=""> Te Reo Māori &nbsp; <img src="https://flagcdn.com/w40/gb-wls.png" width="20" alt=""> Cymraeg
 
 It's plain PHP with a SQLite database: no frameworks, no build step, no external services. It runs on almost any shared hosting (cPanel and similar), and on your own computer for testing.
 
@@ -33,6 +37,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 ## Features
 
 **For guests**
+- **Their own language:** nine to choose from (see [Languages](#languages)). Each guest gets their browser's language on their first visit, can switch from the globe at the top or in the footer, and keeps it: their page, their RSVP and every email you send them. Arabic reads right to left.
 - Code entry page with your photo and names. The date stays hidden until a guest enters their code (or show it with `DATE_ON_HOME_PAGE`). The code fills in automatically from the invitation link.
 - RSVP: *Joyfully accepts / Regretfully declines / Not sure yet*, choosing **who's coming** per person ("Sarah & Tom Jones" gets a tick box each), or a number for "The Smith Family".
 - Dietary requirements per person, picked from a list or typed in, shown as removable chips.
@@ -42,6 +47,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 - Works well on phones, tablets and desktops.
 
 **For you (admin)**
+- **The admin area in your language too:** every screen, message and email to you, in any of the nine languages, chosen by each admin. Translate your own wording with one language menu that shows what's done and what's next.
 - **Guests:** add invitations in bulk (`Name; email` per line) or by uploading a spreadsheet saved as CSV, edit, copy links, and download a CSV. Tick several invitations to send (or resend) them, or delete them, together. A couple can have an email address each, and both get the invitation and updates. Summary counts, plus a dietary requirements donut chart.
 - **Insights:** RSVP funnel (invited → emailed → visited → replied), who to nudge, headcount range, caterer-ready dietary list with allergies flagged (CSV), and replies over time.
 - **Invitation email:** styled HTML email with your photo, preview, test send, and send to everyone not yet emailed.
@@ -79,6 +85,38 @@ All settings live in `private/config.php`. See `private/config.example.php` for 
 - **Colours:** CSS variables at the top of `public_html/assets/style.css`.
 
 Look-and-feel settings can also go in a separate `private/site.php`, which `deploy.sh` uploads (unlike `config.php`), so you can tweak them without touching the server by hand.
+
+## Languages
+
+Everything a guest or an admin sees is localised, not just the guest pages:
+
+| | Language | | Guest pages | Emails | Admin area | Notes |
+|---|---|---|:---:|:---:|:---:|---|
+| <img src="https://flagcdn.com/w40/gb.png" width="20" alt=""> | **English** | English | ✓ | ✓ | ✓ |  |
+| <img src="https://flagcdn.com/w40/es.png" width="20" alt=""> | **Español** | Spanish | ✓ | ✓ | ✓ |  |
+| <img src="https://flagcdn.com/w40/de.png" width="20" alt=""> | **Deutsch** | German | ✓ | ✓ | ✓ |  |
+| <img src="https://flagcdn.com/w40/fr.png" width="20" alt=""> | **Français** | French | ✓ | ✓ | ✓ |  |
+| <img src="https://flagcdn.com/w40/sa.png" width="20" alt=""> | **العربية** | Arabic | ✓ | ✓ | ✓ | Right to left, six plural forms, optional Eastern Arabic digits |
+| <img src="https://flagcdn.com/w40/cn.png" width="20" alt=""> | **简体中文** | Chinese (Simplified) | ✓ | ✓ | ✓ | No plurals; names with 和、 split into people |
+| <img src="https://flagcdn.com/w40/tw.png" width="20" alt=""> | **繁體中文** | Chinese (Traditional) | ✓ | ✓ | ✓ | Chosen automatically for Taiwan, Hong Kong and Macau browsers |
+| <img src="https://flagcdn.com/w40/nz.png" width="20" alt=""> | **Te Reo Māori** | Māori | ✓ | ✓ | ✓ | Guests as *koutou*, the couple as *māua* |
+| <img src="https://flagcdn.com/w40/gb-wls.png" width="20" alt=""> | **Cymraeg** | Welsh | ✓ | ✓ | ✓ | Six plural forms; "a"/"ac" between names |
+
+*Flags are just for colour: a language belongs to many places, so the flag shown is only one of them.*
+
+**For guests**
+- They get their browser's language on their first visit (falling back to the site's), can change it from the globe at the top of the page or in the footer, and keep it after that. If a page is in a language they didn't choose, a small line at the top offers to switch.
+- It's saved on their invitation, so update emails arrive in it too. The first invitation email goes in the site's language, unless you've set a guest's language yourself (when editing an invitation, or with a *Language* column in your CSV).
+- Dates, plurals, names ("Ana y Luis", "王小明和李华") and right-to-left layout all follow the language.
+
+**For you**
+- **Your own wording** can be translated as well: each guest-page section, the invitation email and tagline, and each update have a version per language, chosen with one menu that shows what's translated and what's next. Anything you haven't translated falls back to your main version; built-in text you haven't changed comes already translated, and the sample sections come with a draft in every language.
+- **Each admin** picks the language of the admin area, and of emails sent to them (such as feedback notices), under avatar menu → **Your account**.
+- **Settings** (in `config.php`): `SITE_LANGUAGE` is the language you write in; `LANGUAGES` is the list offered (`['en']` for English only); `ARABIC_DIGITS` set to `'eastern'` shows Arabic numbers as ٠-٩.
+
+**Drafts, and adding more:** everything other than English started as a draft. If something reads wrongly, please [suggest a correction](https://github.com/codeglobally/joyfully-accepts/issues/new?template=translation.yml). To add a language, [ask for it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=new_language.yml): it's a pair of phrase files and a few lines of code (see [CONTRIBUTING](CONTRIBUTING.md#translations)).
+
+**Guests in mainland China:** Google services are blocked there, so the *Google Calendar* option won't open for them; the Apple/Outlook calendar file works everywhere. The site itself uses no Google fonts or scripts, so it loads normally. If a section links to Google Maps, consider adding an Apple Maps or Baidu/Amap link too.
 
 ## Putting it online
 
@@ -191,6 +229,8 @@ private/                Never served to browsers
   insights.php          Insights tab
   calendar.php          Calendar file and links
   photo.php             Photo shape and edge colours
+  i18n.php              Languages: choosing one, phrases, plurals and dates
+  lang/                 Guest phrases per language; lang/admin/ for the admin area
   data/                 SQLite database (created automatically)
 tests/                  Automated tests (run.php) and their settings
 docs/screenshots/       Images for this README
@@ -208,6 +248,7 @@ deploy.sh               One-command deploy to cPanel hosting
 
 - **Used it for your wedding?** [Tell us how it went](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feedback.yml). It's the best way to improve it.
 - **Found a bug?** [Report it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=bug_report.yml).
+- **Speak one of the languages?** [Correct a translation](https://github.com/codeglobally/joyfully-accepts/issues/new?template=translation.yml) or [ask for a new one](https://github.com/codeglobally/joyfully-accepts/issues/new?template=new_language.yml).
 - **Have an idea?** [Suggest it](https://github.com/codeglobally/joyfully-accepts/issues/new?template=feature_request.yml).
 - **Found a security problem?** Please report it [privately](https://github.com/codeglobally/joyfully-accepts/security/advisories/new), never in a public issue. See [SECURITY.md](SECURITY.md).
 

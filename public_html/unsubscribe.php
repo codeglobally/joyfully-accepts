@@ -29,38 +29,37 @@ if ($guest && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $on = !$oneClick && input($_POST, 'notify') === '1';
     db()->prepare('UPDATE guests SET notify = ? WHERE id = ?')->execute([$on ? 1 : 0, $guest['id']]);
     if ($oneClick) {
-        exit('Unsubscribed.');
+        exit(in_language(guest_email_language($guest), fn() => t('unsub.one_click')));
     }
     header('Location: /unsubscribe.php?code=' . urlencode((string)$guest['code']) . '&done=' . ($on ? 'on' : 'off'));
     exit;
 }
 
+set_language($guest ? guest_email_language($guest) : visitor_language());
 page_header(COUPLE_NAMES, 'photo-bg');
 ?>
 <main class="entry lightbox">
-  <p class="eyebrow">Wedding updates</p>
+  <p class="eyebrow"><?= th('unsub.eyebrow') ?></p>
   <h1><?= h(COUPLE_NAMES) ?></h1>
   <div class="code-box">
     <?php if (!$guest): ?>
-      <p>This link doesn't match an invitation. Please check you used the whole link from your email.</p>
+      <p><?= th('unsub.no_match') ?></p>
     <?php else:
         $on = (int)$guest['notify'] === 1;
         $done = input($_GET, 'done'); ?>
       <?php if ($done === 'off'): ?>
-        <p class="notice" role="status">Done. You won't get any more update emails.</p>
+        <p class="notice" role="status"><?= th('unsub.done_off') ?></p>
       <?php elseif ($done === 'on'): ?>
-        <p class="notice" role="status">Thanks, you'll get updates again.</p>
+        <p class="notice" role="status"><?= th('unsub.done_on') ?></p>
       <?php endif; ?>
-      <p><?= $on
-          ? 'Stop wedding update emails for ' . h($guest['name']) . '? You can still see everything, and change your reply, on the wedding website.'
-          : 'Update emails are turned off for ' . h($guest['name']) . '.' ?></p>
+      <p><?= th($on ? 'unsub.ask' : 'unsub.off_now', ['name' => greeting_name($guest)]) ?></p>
       <form method="post" action="/unsubscribe.php?code=<?= h(urlencode($code)) ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="notify" value="<?= $on ? '0' : '1' ?>">
-        <button type="submit"><?= $on ? 'Stop update emails' : 'Turn updates back on' ?></button>
+        <button type="submit"><?= th($on ? 'unsub.stop' : 'unsub.restart') ?></button>
       </form>
     <?php endif; ?>
   </div>
-  <p class="site-footer"><a href="<?= $guest ? h(invite_link($guest['code'])) : '/' ?>">Go to the wedding website</a></p>
+  <p class="site-footer"><a href="<?= $guest ? h(invite_link($guest['code'])) : '/' ?>"><?= th('unsub.site_link') ?></a></p>
 </main>
 <?php page_footer();

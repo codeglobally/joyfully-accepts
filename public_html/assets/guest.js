@@ -1,3 +1,12 @@
+// Phrases in the page's language, from js_phrases() in private/i18n.php.
+var PHRASES = (function () {
+  var el = document.getElementById('phrases');
+  try { return el ? JSON.parse(el.dataset.phrases) : {}; } catch (e) { return {}; }
+})();
+function phrase(key, text) {
+  return (PHRASES[key] || key).replace('{text}', text || '');
+}
+
 // Turns each dietary multi-select into a box of removable chips with a
 // dropdown of choices. Typing filters the list; Enter (or a comma) adds
 // what's typed. The hidden <select> stays the source of truth, so the form
@@ -78,7 +87,7 @@
         .filter(function (o) { return !o.selected && o.text.toLowerCase().indexOf(lower) !== -1; })
         .map(function (o) { return { value: o.text, label: o.text }; });
       if (query && !find(query)) {
-        items.push({ value: query, label: 'Add “' + query + '”', add: true });
+        items.push({ value: query, label: phrase('chips.add', query), add: true });
       }
 
       list.textContent = '';
@@ -161,7 +170,7 @@
         chip.appendChild(document.createTextNode(option.text));
         x.type = 'button';
         x.textContent = '×';
-        x.setAttribute('aria-label', 'Remove ' + option.text);
+        x.setAttribute('aria-label', phrase('chips.remove', option.text));
         x.addEventListener('click', function () { remove(option); });
         chip.appendChild(x);
         box.insertBefore(chip, input);
@@ -242,7 +251,7 @@
     var body = card.querySelector('.card-body');
     if (!btn || !body) return;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    btn.setAttribute('title', open ? 'Collapse' : 'Expand');
+    btn.setAttribute('title', phrase(open ? 'card.collapse' : 'card.expand'));
     body.hidden = !open;
     card.classList.toggle('is-collapsed', !open);
   }

@@ -5,13 +5,14 @@ require is_dir(__DIR__ . '/../private') ? __DIR__ . '/../private/lib.php' : __DI
 
 $error = '';
 $code = normalise_code(input($_GET, 'code'));
+set_language(visitor_language());
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     check_csrf();
     $code = normalise_code(input($_POST, 'code'));
 
     if (too_many_attempts()) {
-        $error = 'Too many attempts. Please wait 15 minutes and try again.';
+        $error = t('home.too_many', ['minutes' => number_text(15)]);
     } else {
         $q = db()->prepare('SELECT id FROM guests WHERE code = ?');
         $q->execute([$code]);
@@ -24,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         record_failed_attempt();
-        $error = "That code doesn't match an invitation. Please check it and try again.";
+        $error = t('home.wrong_code');
     }
 } elseif ($code === '' && current_guest()) {
     header('Location: /guest.php');
@@ -38,7 +39,7 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg' : 'centered');
 <div class="photo-frame">
   <?php foreach (array_values(PHOTO_HOTSPOTS) as $i => $spot): ?>
     <a class="photo-hotspot photo-hotspot-<?= $i ?>" href="<?= h($spot['url'] ?? '#') ?>" target="_blank" rel="noopener"
-       title="<?= h($spot['title'] ?? '') ?>" aria-label="<?= h($spot['title'] ?? 'Link') ?>"></a>
+       title="<?= h($spot['title'] ?? '') ?>" aria-label="<?= h($spot['title'] ?? t('home.photo_link')) ?>"></a>
   <?php endforeach; ?>
 </div>
 <?php endif; ?>
@@ -48,19 +49,21 @@ page_header(COUPLE_NAMES, has_photo() ? 'photo-bg' : 'centered');
     array_keys(PHOTO_CAPTION), PHOTO_CAPTION)) ?></p>
 <?php endif; ?>
 <main class="entry lightbox">
+  <?= language_hint_html() ?>
+  <div class="corner"><?= language_menu('top') ?></div>
   <p class="eyebrow"><?= h(tagline()) ?></p>
   <h1><?= h(COUPLE_NAMES) ?></h1>
-  <?php if (DATE_ON_HOME_PAGE): ?><p class="date"><?= h(WEDDING_DATE) ?></p><?php endif; ?>
+  <?php if (DATE_ON_HOME_PAGE): ?><p class="date"><?= h(wedding_date_text()) ?></p><?php endif; ?>
 
   <form method="post" action="/" class="code-box" autocomplete="off">
     <?= csrf_field() ?>
-    <label for="code">Enter your invitation code</label>
+    <label for="code"><?= th('home.code_label') ?></label>
     <input id="code" name="code" type="text" inputmode="text" maxlength="12"
            autocapitalize="characters" spellcheck="false" required
            placeholder="XXXXXXXX" value="<?= h($code) ?>"
            <?= $code === '' ? 'autofocus' : '' ?>>
     <?php if ($error): ?><p class="error" role="alert"><?= h($error) ?></p><?php endif; ?>
-    <button type="submit">Enter</button>
+    <button type="submit"><?= th('home.enter') ?></button>
   </form>
   <?= lightbox_footer() ?>
 </main>
