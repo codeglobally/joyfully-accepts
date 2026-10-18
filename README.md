@@ -1,6 +1,6 @@
 # Joyfully Accepts
 
-[![Version](https://img.shields.io/badge/version-2.7.0-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
+[![Version](https://img.shields.io/badge/version-2.7.1-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
 [![Tests](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml/badge.svg)](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml)
 [![Security](https://github.com/codeglobally/joyfully-accepts/actions/workflows/security.yml/badge.svg)](SECURITY.md)
 [![WCAG 2.1 AA](https://img.shields.io/badge/WCAG_2.1-AA-2e7d32)](#accessibility)

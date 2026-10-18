@@ -151,7 +151,8 @@ step "Building $ZIP_NAME (version $VERSION)"
 unzip -l "$WORK/$ZIP_NAME" | grep -qE "private/config\.php|\.sqlite" && die "Zip unexpectedly contains config or database."
 cp "$WORK/$ZIP_NAME" "$HERE/$ZIP_NAME"
 
-LIVE_VERSION="$(curl -sS -m 20 "$SITE/" | sed -n 's/.*&middot; v\([0-9][0-9.]*\).*/\1/p' | head -1)"
+# The footer shows "v1.2.3" right before a tag ("</bdi>" since 2.6, "<" before).
+LIVE_VERSION="$(curl -sS -m 20 "$SITE/" | sed -n 's/.*>v\([0-9][0-9.]*\)<.*/\1/p' | head -1)"
 echo "  live site is on v${LIVE_VERSION:-unknown}"
 if [[ "$LIVE_VERSION" == "$VERSION" ]]; then
     echo "  ! The live site already shows v$VERSION, so the final check can't prove the"

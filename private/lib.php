@@ -25,7 +25,7 @@ const APP_DIR = __DIR__;
 // Semantic version, MAJOR.MINOR.PATCH, bumped with every change (see
 // CHANGELOG.md): MAJOR when site owners must do something to upgrade, MINOR
 // for anything new, PATCH for fixes and small tweaks. Shown in the footer.
-const SITE_VERSION = '2.7.0';
+const SITE_VERSION = '2.7.1';
 
 // Credited in every site's footer: "© <year> global.ly", linking to the project.
 const PROJECT_NAME = 'global.ly';
