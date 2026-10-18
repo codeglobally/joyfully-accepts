@@ -28,7 +28,6 @@ return [
     'admin.main' => '(main)',
     'admin.translated' => 'translated',
     'admin.written' => 'written',
-    'admin.lang_tabs_label' => 'Language of this version',
     'admin.saved_version' => 'Saved the {language} version.',
     'admin.saved_changes' => 'Saved changes to {name}.',
     'admin.test_sent' => 'Test sent to {email}.',
@@ -524,4 +523,12 @@ return [
     'admin.stpl.blank.label' => 'Blank section',
     'admin.stpl.day.title' => 'The day',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[Open in Maps]({map})\n\nAdd the timings for the day here, e.g. ceremony at 3pm, followed by drinks, dinner and dancing.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'Editing',
+    'admin.picker.choose' => 'Choose the language to edit',
+    'admin.picker.progress' => '{done} of {total} translated',
+    'admin.picker.next' => 'Next untranslated',
+    'admin.picker.all_done' => 'All translated',
+    'admin.picker.todo' => 'not yet',
 ];

@@ -2,6 +2,13 @@
 
 What changed in each version. The site uses [semantic versioning](https://semver.org): MAJOR when site owners must do something to upgrade, MINOR for anything new, PATCH for fixes and small tweaks. Every change bumps the version.
 
+## 2.7.0
+
+- **Choosing a language, however many there are:**
+  - Admin: one compact menu replaces the row of language tabs on the Invitation email tab and in the section editor ("Editing: Español ✓ ▾"). It lists every language with whether it's translated yet, and there's a count and a *Next untranslated* link. On the Updates tab it switches between translations in place, one at a time.
+  - Guests: the language menu is in the top corner of the code page and guest page as well as the footer (just the globe on phones). It opens as a small panel, with the visitor's own browser languages first and the current one ticked.
+  - Guests: if a page is in a language the guest didn't choose (set in admin, or from another device), a small line at the top offers to switch to the one chosen in this browser, or the browser's own, written in that language. "No thanks" means it isn't offered again.
+
 ## 2.6.1
 
 - `deploy.sh`: the check that the new version is live now finds it in the 2.6 footer.

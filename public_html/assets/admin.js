@@ -23,8 +23,8 @@ document.querySelectorAll('form[data-autosubmit]').forEach(function (form) {
   form.addEventListener('change', function () { form.submit(); });
 });
 
-// Account menu (top right): close it with Escape or by clicking elsewhere.
-document.querySelectorAll('details.account-menu').forEach(function (menu) {
+// Account menu (top right) and language pickers: close with Escape or by clicking elsewhere.
+document.querySelectorAll('details.account-menu, details.lang-menu').forEach(function (menu) {
   document.addEventListener('click', function (e) {
     if (menu.open && !menu.contains(e.target)) menu.open = false;
   });
@@ -219,3 +219,53 @@ document.querySelectorAll('[data-md-size]').forEach(function (menu) {
     el.addEventListener('mouseleave', function () { mark(null); });
   });
 })();
+
+// Updates tab: every translation is in the one form, so the language picker
+// shows one at a time instead of loading a page. Without JavaScript they're a
+// list of collapsible rows instead.
+document.querySelectorAll('[data-lang-switch]').forEach(function (picker) {
+  var box = picker.closest('details.translations');
+  var items = Array.prototype.slice.call(box.querySelectorAll('details.translation[data-lang]'));
+  var menu = picker.querySelector('details.lang-menu');
+  var links = Array.prototype.slice.call(picker.querySelectorAll('.lang-menu-list a[data-lang]'));
+  var next = picker.querySelector(':scope > a[data-lang]');
+  var arrow = document.documentElement.dir === 'rtl' ? ' \u2190' : ' \u2192';
+  function show(code) {
+    items.forEach(function (item) {
+      item.hidden = item.dataset.lang !== code;
+      item.open = true;
+    });
+    links.forEach(function (a) {
+      if (a.dataset.lang === code) {
+        a.setAttribute('aria-current', 'page');
+        picker.querySelector('[data-current]').textContent = a.firstElementChild.textContent;
+        picker.querySelector('[data-current]').lang = code;
+        var status = picker.querySelector('[data-current-status]');
+        status.textContent = a.lastElementChild.textContent;
+        status.className = a.lastElementChild.className;
+      } else {
+        a.removeAttribute('aria-current');
+      }
+    });
+    // "Next untranslated": the next one after this that hasn't got a version.
+    if (next) {
+      var at = links.findIndex(function (a) { return a.dataset.lang === code; });
+      var order = links.slice(at + 1).concat(links.slice(0, at));
+      var todo = order.filter(function (a) { return a.lastElementChild.classList.contains('todo'); })[0];
+      next.hidden = !todo;
+      if (todo) { next.dataset.lang = todo.dataset.lang; next.href = todo.getAttribute('href'); }
+    }
+    menu.open = false;
+  }
+  picker.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-lang]');
+    if (!a) return;
+    e.preventDefault();
+    show(a.dataset.lang);
+    var field = box.querySelector('details.translation[data-lang="' + a.dataset.lang + '"] input');
+    if (field) field.focus();
+  });
+  box.dataset.switching = '';
+  picker.hidden = false;
+  show(links[0].dataset.lang);
+});

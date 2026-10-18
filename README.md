@@ -1,6 +1,6 @@
 # Joyfully Accepts
 
-[![Version](https://img.shields.io/badge/version-2.6.1-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
+[![Version](https://img.shields.io/badge/version-2.7.0-c2410c)](https://github.com/codeglobally/joyfully-accepts/releases)
 [![Tests](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml/badge.svg)](https://github.com/codeglobally/joyfully-accepts/actions/workflows/tests.yml)
 [![Security](https://github.com/codeglobally/joyfully-accepts/actions/workflows/security.yml/badge.svg)](SECURITY.md)
 [![WCAG 2.1 AA](https://img.shields.io/badge/WCAG_2.1-AA-2e7d32)](#accessibility)
@@ -33,7 +33,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 ## Features
 
 **For guests**
-- **Nine languages:** English, Español, Deutsch, Français, العربية (right to left), 简体中文, 繁體中文, Te Reo Māori and Cymraeg. Each guest gets their browser's language on their first visit, can switch in the footer, and keeps it, emails included. See [Languages](#languages).
+- **Nine languages:** English, Español, Deutsch, Français, العربية (right to left), 简体中文, 繁體中文, Te Reo Māori and Cymraeg. Each guest gets their browser's language on their first visit, can switch from the globe at the top or in the footer, and keeps it, emails included. See [Languages](#languages).
 - Code entry page with your photo and names. The date stays hidden until a guest enters their code (or show it with `DATE_ON_HOME_PAGE`). The code fills in automatically from the invitation link.
 - RSVP: *Joyfully accepts / Regretfully declines / Not sure yet*, choosing **who's coming** per person ("Sarah & Tom Jones" gets a tick box each), or a number for "The Smith Family".
 - Dietary requirements per person, picked from a list or typed in, shown as removable chips.
@@ -85,8 +85,9 @@ Look-and-feel settings can also go in a separate `private/site.php`, which `depl
 
 The guest pages, emails and admin area come in English, Español, Deutsch, Français, العربية, 简体中文, 繁體中文, Te Reo Māori and Cymraeg.
 
-- **Guests** get their browser's language on their first visit (falling back to the site's), can change it from the globe in the footer, and keep it after that. It's saved on their invitation, so update emails arrive in it too. The first invitation email goes in the site's language, unless you've set a guest's language yourself (when editing an invitation, or with a *Language* column in your CSV).
+- **Guests** get their browser's language on their first visit (falling back to the site's), can change it from the globe at the top of the page or in the footer, and keep it after that. If a page is in a language they didn't choose, a small line at the top offers to switch. It's saved on their invitation, so update emails arrive in it too. The first invitation email goes in the site's language, unless you've set a guest's language yourself (when editing an invitation, or with a *Language* column in your CSV).
 - **Your own wording** can be translated as well: each guest-page section, the invitation email and tagline, and each update have a version per language. Anything you haven't translated falls back to your main version; built-in text you haven't changed is already translated.
+- **Translating your wording** uses one language menu showing what's translated and what's next, however many languages you offer.
 - **Each admin** picks the language of the admin area, and of emails sent to them, under avatar menu → **Your account**.
 - **Settings** (in `config.php`): `SITE_LANGUAGE` is the language you write in; `LANGUAGES` is the list guests can choose from (`['en']` for English only); `ARABIC_DIGITS` set to `'eastern'` shows Arabic numbers as ٠-٩.
 - **Drafts:** everything other than English is a first draft. If something reads wrongly, please [suggest a correction](https://github.com/codeglobally/joyfully-accepts/issues/new?template=translation.yml), or [ask for another language](https://github.com/codeglobally/joyfully-accepts/issues/new?template=new_language.yml).

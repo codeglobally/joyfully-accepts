@@ -400,6 +400,31 @@ check('language menu offers every language, each in its own name', (function () 
     return substr_count($menu, 'name="lang"') === count(site_languages()) && strpos($menu, 'lang="ar" dir="rtl"') !== false
         && strpos($menu, '简体中文') !== false;
 })());
+same('browser languages ranked, best first', ['de', 'fr', 'en'], ranked_languages('fr;q=0.8, de, en;q=0.5, xx', ['en', 'de', 'fr']));
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'cy, fr;q=0.8';
+$order = languages_for_visitor();
+same('the menu lists the browser\'s languages first', ['cy', 'fr', 'en'], array_slice($order, 0, 3));
+check('...then every other language once', count($order) === count(site_languages()) && count(array_unique($order)) === count($order));
+check('the current language is ticked', (bool)preg_match('#value="en"[^>]*aria-current="true">English <span class="tick"#', language_menu()));
+check('the corner menu is its own variant', strpos(language_menu('top'), 'class="language-menu top"') !== false);
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'es';
+same('hint: the browser\'s language, when the page is in another', 'es', language_hint(['language_set_by' => 'admin']));
+same('...not when the guest chose this language themselves', null, language_hint(['language_set_by' => 'guest']));
+same('...not when the page is already in it', null, in_language('es', fn() => language_hint(['language_set_by' => 'admin'])));
+$_COOKIE[LANGUAGE_HINT_COOKIE] = 'es';
+same('...not once turned down', null, language_hint(['language_set_by' => 'admin']));
+unset($_COOKIE[LANGUAGE_HINT_COOKIE]);
+$hint = language_hint_html(['language_set_by' => 'browser']);
+check('the hint is written in the suggested language', strpos($hint, 'Ver esta página en Español') !== false && strpos($hint, 'lang="es"') !== false
+    && strpos($hint, 'name="dismiss" value="es"') !== false);
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'ar';
+check('...right to left for Arabic', strpos(language_hint_html(null), 'dir="rtl"') !== false);
+unset($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+same('no browser language, no hint', null, language_hint(null));
+$_COOKIE[LANGUAGE_COOKIE] = 'zh-Hans';
+$_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'de';
+same('a language chosen in this browser is the one suggested', 'zh-Hans', language_hint(['language_set_by' => 'admin']));
+unset($_COOKIE[LANGUAGE_COOKIE], $_SERVER['HTTP_ACCEPT_LANGUAGE']);
 
 section('Phrase files');
 $english = phrases('en');
@@ -678,6 +703,11 @@ foreach ($argv as $arg) {
     $langOf = fn() => db()->query('SELECT language || \'/\' || language_set_by FROM guests WHERE code = ' . db()->quote($code))->fetchColumn();
     check('first visit saves a language on the invitation', $langOf() === 'en/browser');
     check('guest pages offer the language menu', strpos($guestPage['body'], 'action="/language.php"') !== false);
+    check('...in the top corner as well as the footer', strpos($guestPage['body'], 'class="language-menu top"') !== false
+        && strpos($guestPage['body'], 'class="language-menu footer"') !== false);
+    $dismissed = $get('/language.php', ['csrf' => $csrf($guestPage['body']), 'dismiss' => 'es', 'back' => '/guest.php']);
+    check('turning down the suggestion remembers it, and changes nothing else', stripos($dismissed['headers'], 'set-cookie: lang_hint=es') !== false
+        && stripos($dismissed['headers'], 'set-cookie: lang=') === false);
     $chose = $get('/language.php', ['csrf' => $csrf($guestPage['body']), 'lang' => 'ar', 'back' => '/guest.php']);
     check('choosing a language saves it and goes back', $langOf() === 'ar/guest' && stripos($chose['headers'], "location: /guest.php\r\n") !== false);
     $arabic = $get('/guest.php')['body'];
@@ -906,6 +936,15 @@ foreach ($argv as $arg) {
     $acct = $get('/admin.php?tab=account');
     $get('/admin.php', ['csrf' => $csrf($acct['body']), 'action' => 'account_language', 'language' => 'ar']);
     $arAdmin = $get('/admin.php?tab=guests')['body'];
+    $emailTab = $get('/admin.php?tab=email')['body'];
+    // (Checked by structure: the admin may be in any language here.)
+    check('invitation email: one language picker listing every language, with a next link', strpos($emailTab, 'class="lang-picker"') !== false
+        && substr_count($emailTab, '<li><a href="/admin.php?tab=email') === count(site_languages())
+        && (bool)preg_match('#</details><span class="hint">[^<]*8[^<]*</span><a class="link" href="/admin.php\?tab=email&amp;lang=#', $emailTab)
+        && strpos($emailTab, 'lang-tabs') === false);
+    $updatesTab = $get('/admin.php?tab=updates&template=1')['body'];
+    check('updates: the picker switches translations on the page', strpos($updatesTab, 'data-lang-switch hidden') !== false
+        && strpos($updatesTab, 'href="#tr-es"') !== false && strpos($updatesTab, 'id="tr-es"') !== false);
     check('admin in Arabic once chosen: right-to-left, Arabic tabs and flash', strpos($arAdmin, '<html lang="ar" dir="rtl">') !== false
         && strpos($arAdmin, '>الضيوف</a>') !== false && strpos($arAdmin, 'Invitations (') === false);
     check('admin script phrases come in Arabic', strpos($arAdmin, 'id="phrases"') !== false && strpos($arAdmin, 'تم النسخ') !== false);

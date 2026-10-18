@@ -169,4 +169,8 @@ return [
     'date.day_month_year' => '{year}年{month}{day}日',
     'date.with_time' => '{date} {time}',
     'date.with_weekday' => '{date} {weekday}',
+
+    // Suggesting the visitor's own language (top of guest pages).
+    'language.suggest' => '以{language}檢視此頁面',
+    'language.keep' => '不用了',
 ];

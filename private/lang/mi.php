@@ -169,4 +169,8 @@ return [
     'date.day_month_year' => '{day} {month} {year}',
     'date.with_time' => '{date}, {time}',
     'date.with_weekday' => '{weekday}, {date}',
+
+    // Suggesting the visitor's own language (top of guest pages).
+    'language.suggest' => 'Tirohia tēnei whārangi i te {language}',
+    'language.keep' => 'Kāo, ngā mihi',
 ];

@@ -107,9 +107,13 @@ $sections = localise_sections(all_sections(true), current_language());
 page_header(COUPLE_NAMES, has_photo() ? 'photo-bg guest-page' : 'guest-page');
 ?>
 <div class="lightbox page">
+<?= language_hint_html($guest) ?>
 <header class="top">
   <span class="brand"><?= h(COUPLE_NAMES) ?></span>
-  <a href="/logout.php" class="link"><?= th('guest.sign_out') ?></a>
+  <span class="top-links">
+    <?= language_menu('top') ?>
+    <a href="/logout.php" class="link"><?= th('guest.sign_out') ?></a>
+  </span>
 </header>
 
 <main class="content">

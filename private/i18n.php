@@ -78,6 +78,12 @@ function is_rtl(?string $code = null): bool
 // script: zh-TW, zh-HK and zh-MO read Traditional; zh, zh-CN and zh-SG Simplified.
 function negotiate_language(string $header, array $available): ?string
 {
+    return ranked_languages($header, $available)[0] ?? null;
+}
+
+// Every language in $available the header asks for, most wanted first.
+function ranked_languages(string $header, array $available): array
+{
     $wanted = [];
     foreach (explode(',', $header) as $i => $part) {
         $bits = array_map('trim', explode(';', $part));
@@ -97,13 +103,14 @@ function negotiate_language(string $header, array $available): ?string
     }
     // Highest q first; ties keep the browser's order.
     usort($wanted, fn($a, $b) => $b[1] <=> $a[1] ?: $a[2] <=> $b[2]);
+    $out = [];
     foreach ($wanted as [$tag]) {
         $code = language_for_tag($tag);
-        if ($code !== null && in_array($code, $available, true)) {
-            return $code;
+        if ($code !== null && in_array($code, $available, true) && !in_array($code, $out, true)) {
+            $out[] = $code;
         }
     }
-    return null;
+    return $out;
 }
 
 // "en-GB" -> en, "zh-tw" -> zh-Hant, "zh-hans-cn" -> zh-Hans.
@@ -361,7 +368,18 @@ function t_html(string $key, array $html = [], array $vars = []): string
 
 // The language menu at the bottom of guest pages: each language in its own
 // name and script. Posts to /language.php, which remembers the choice.
-function language_menu(): string
+// The languages in the order a visitor would want to see them: their
+// browser's languages first, then the rest as offered.
+function languages_for_visitor(): array
+{
+    $mine = ranked_languages((string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''), site_languages());
+    return array_values(array_unique(array_merge($mine, site_languages())));
+}
+
+// The language menu: a globe and the current language, opening a list of
+// every language in its own name. $where is 'footer' (centred, opening
+// downwards in the page) or 'top' (a corner of the page, opening as a panel).
+function language_menu(string $where = 'footer'): string
 {
     $codes = site_languages();
     if (count($codes) < 2) {
@@ -371,16 +389,50 @@ function language_menu(): string
     $globe = '<svg class="icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false" fill="none" '
         . 'stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/>'
         . '<path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>';
-    $out = '<details class="language-menu"><summary aria-label="' . th('language.menu') . ': ' . h(LANGUAGE_NAMES[current_language()]) . '">'
+    $out = '<details class="language-menu ' . ($where === 'top' ? 'top' : 'footer') . '">'
+        . '<summary aria-label="' . th('language.menu') . ': ' . h(LANGUAGE_NAMES[current_language()]) . '">'
         . $globe . ' <span lang="' . h(current_language()) . '">' . h(LANGUAGE_NAMES[current_language()]) . '</span></summary>'
         . '<form method="post" action="/language.php" class="language-list">' . csrf_field()
         . '<input type="hidden" name="back" value="' . h($here) . '">';
-    foreach ($codes as $code) {
+    foreach (languages_for_visitor() as $code) {
         $out .= '<button type="submit" name="lang" value="' . h($code) . '" lang="' . h($code) . '"'
             . (in_array($code, RTL_LANGUAGES, true) ? ' dir="rtl"' : '')
-            . ($code === current_language() ? ' aria-current="true"' : '') . '>' . h(LANGUAGE_NAMES[$code]) . '</button>';
+            . ($code === current_language() ? ' aria-current="true"' : '') . '>' . h(LANGUAGE_NAMES[$code])
+            . ($code === current_language() ? ' <span class="tick" aria-hidden="true">✓</span>' : '') . '</button>';
     }
     return $out . '</form></details>';
+}
+
+const LANGUAGE_HINT_COOKIE = 'lang_hint';
+
+// The language to suggest switching to, or null: the one chosen in this
+// browser, or else the browser's favourite offered language, when the page
+// is in a different one the guest didn't pick themselves (set in admin, or
+// saved from another device), and the suggestion hasn't been turned down.
+function language_hint(?array $guest = null): ?string
+{
+    $browser = cookie_language() ?? browser_language();
+    if ($browser === null || $browser === current_language()) {
+        return null;
+    }
+    if ($guest !== null && ($guest['language_set_by'] ?? '') === 'guest') {
+        return null;   // they picked it themselves
+    }
+    return ($_COOKIE[LANGUAGE_HINT_COOKIE] ?? '') === $browser ? null : $browser;
+}
+
+// The one-line suggestion, written in the suggested language.
+function language_hint_html(?array $guest = null): string
+{
+    $code = language_hint($guest);
+    if ($code === null) {
+        return '';
+    }
+    $here = (string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+    return in_language($code, fn() => '<form method="post" action="/language.php" class="language-hint" lang="' . h($code) . '" dir="'
+        . (is_rtl() ? 'rtl' : 'ltr') . '">' . csrf_field() . '<input type="hidden" name="back" value="' . h($here) . '">'
+        . '<button type="submit" name="lang" value="' . h($code) . '" class="link">' . th('language.suggest', ['language' => LANGUAGE_NAMES[$code]]) . '</button>'
+        . '<button type="submit" name="dismiss" value="' . h($code) . '" class="link quiet">' . th('language.keep') . '</button></form>');
 }
 
 // True if there's a phrase for $key (in the current language or English).

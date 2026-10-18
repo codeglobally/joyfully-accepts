@@ -25,7 +25,6 @@ return [
     'admin.main' => '(Hauptsprache)',
     'admin.translated' => 'übersetzt',
     'admin.written' => 'geschrieben',
-    'admin.lang_tabs_label' => 'Sprache dieser Fassung',
     'admin.saved_version' => 'Die Fassung auf {language} wurde gespeichert.',
     'admin.saved_changes' => 'Änderungen an {name} gespeichert.',
     'admin.test_sent' => 'Test an {email} gesendet.',
@@ -508,4 +507,12 @@ return [
     'admin.stpl.blank.label' => 'Leerer Abschnitt',
     'admin.stpl.day.title' => 'Der Tag',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[In Karten öffnen]({map})\n\nTragen Sie hier den Ablauf des Tages ein, z. B. Trauung um 15 Uhr, danach Empfang, Essen und Tanz.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'Bearbeiten',
+    'admin.picker.choose' => 'Sprache zum Bearbeiten wählen',
+    'admin.picker.progress' => '{done} von {total} übersetzt',
+    'admin.picker.next' => 'Nächste ohne Übersetzung',
+    'admin.picker.all_done' => 'Alles übersetzt',
+    'admin.picker.todo' => 'noch nicht',
 ];

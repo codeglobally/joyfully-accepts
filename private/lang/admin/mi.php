@@ -26,7 +26,6 @@ return [
     'admin.main' => '(matua)',
     'admin.translated' => 'kua whakamāoritia',
     'admin.written' => 'kua tuhia',
-    'admin.lang_tabs_label' => 'Te reo o tēnei putanga',
     'admin.saved_version' => 'Kua tiakina te putanga {language}.',
     'admin.saved_changes' => 'Kua tiakina ngā panonitanga ki a {name}.',
     'admin.test_sent' => 'Kua tukua te whakamātautau ki {email}.',
@@ -509,4 +508,12 @@ return [
     'admin.stpl.blank.label' => 'Wāhanga wātea',
     'admin.stpl.day.title' => 'Te rā',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[Whakatuwheratia i ngā Mahere]({map})\n\nTāpiritia ngā wā mō te rā ki konei, hei tauira, te karakia i te 3 i te ahiahi, ka whai ko te inu, te kai me te kanikani.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'Kei te whakatika',
+    'admin.picker.choose' => 'Kōwhiria te reo hei whakatika',
+    'admin.picker.progress' => '{done} o te {total} kua whakamāoritia',
+    'admin.picker.next' => 'Te mea e whai ake ana kāore anō kia whakamāoritia',
+    'admin.picker.all_done' => 'Kua whakamāoritia katoatia',
+    'admin.picker.todo' => 'kāore anō',
 ];

@@ -25,7 +25,6 @@ return [
     'admin.main' => '(principale)',
     'admin.translated' => 'traduit',
     'admin.written' => 'rédigé',
-    'admin.lang_tabs_label' => 'Langue de cette version',
     'admin.saved_version' => 'La version en {language} est enregistrée.',
     'admin.saved_changes' => 'Modifications de {name} enregistrées.',
     'admin.test_sent' => 'Test envoyé à {email}.',
@@ -508,4 +507,12 @@ return [
     'admin.stpl.blank.label' => 'Section vide',
     'admin.stpl.day.title' => 'Le jour J',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[Ouvrir dans Plans]({map})\n\nIndiquez ici le programme de la journée, par ex. cérémonie à 15 h, puis vin d’honneur, dîner et danse.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'Modification',
+    'admin.picker.choose' => 'Choisir la langue à modifier',
+    'admin.picker.progress' => '{done} sur {total} traduites',
+    'admin.picker.next' => 'Suivante à traduire',
+    'admin.picker.all_done' => 'Tout est traduit',
+    'admin.picker.todo' => 'pas encore',
 ];

@@ -25,7 +25,6 @@ return [
     'admin.main' => '（主语言）',
     'admin.translated' => '已翻译',
     'admin.written' => '已填写',
-    'admin.lang_tabs_label' => '此版本的语言',
     'admin.saved_version' => '{language}版本已保存。',
     'admin.saved_changes' => '已保存对{name}的更改。',
     'admin.test_sent' => '测试邮件已发送至 {email}。',
@@ -504,4 +503,12 @@ return [
     'admin.stpl.blank.label' => '空白栏目',
     'admin.stpl.day.title' => '当天',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[在地图中打开]({map})\n\n在这里添加当天的时间安排，例如下午 3 点仪式，之后是酒会、晚宴和舞会。",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => '正在编辑',
+    'admin.picker.choose' => '选择要编辑的语言',
+    'admin.picker.progress' => '已翻译 {done}/{total}',
+    'admin.picker.next' => '下一个未翻译',
+    'admin.picker.all_done' => '全部已翻译',
+    'admin.picker.todo' => '尚未',
 ];

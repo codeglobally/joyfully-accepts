@@ -323,6 +323,48 @@ function markdown_hint(): string
     ]);
 }
 
+// Which language's version is being edited: one compact menu, however many
+// languages there are. Each language shows whether it's the main one,
+// translated or not yet, with a count and a link to the next one to do.
+//   $codes   the languages to offer, in order
+//   $current the one being edited
+//   $done    the languages that have a version
+//   $href    fn(code) => the link for that language
+// With $switch, the links are #anchors that admin.js turns into switching
+// between translations already on the page (the Updates tab).
+function lang_picker(array $codes, string $current, array $done, callable $href, bool $switch = false): string
+{
+    $status = fn(string $code) => $code === site_language() ? 'main' : (in_array($code, $done, true) ? 'done' : 'todo');
+    $label = fn(string $code) => ['main' => t('admin.main'), 'done' => '✓ ' . t('admin.translated'), 'todo' => t('admin.picker.todo')][$status($code)];
+    $others = array_values(array_diff($codes, [site_language()]));
+    $doneCount = count(array_intersect($others, $done));
+    // The next language without a version, after the current one.
+    $at = (int)array_search($current, $codes, true);
+    $next = null;
+    foreach (array_merge(array_slice($codes, $at + 1), array_slice($codes, 0, $at)) as $code) {
+        if ($status($code) === 'todo') {
+            $next = $code;
+            break;
+        }
+    }
+    $html = '<div class="lang-picker"' . ($switch ? ' data-lang-switch hidden' : '') . '>'
+        . '<details class="lang-menu"><summary aria-label="' . th('admin.picker.choose') . '">'
+        . '<span class="hint">' . th('admin.picker.editing') . '</span> '
+        . '<strong lang="' . h($current) . '" data-current>' . h(LANGUAGE_NAMES[$current]) . '</strong> '
+        . '<span class="status ' . $status($current) . '" data-current-status>' . h($label($current)) . '</span></summary>'
+        . '<ul class="lang-menu-list">';
+    foreach ($codes as $code) {
+        $html .= '<li><a href="' . h($href($code)) . '" data-lang="' . h($code) . '"' . ($code === $current ? ' aria-current="page"' : '') . '>'
+            . '<span lang="' . h($code) . '">' . h(LANGUAGE_NAMES[$code]) . '</span> '
+            . '<span class="status ' . $status($code) . '">' . h($label($code)) . '</span></a></li>';
+    }
+    $html .= '</ul></details><span class="hint">' . th('admin.picker.progress', ['done' => $doneCount, 'total' => count($others)]) . '</span>';
+    $html .= $next !== null
+        ? '<a class="link" href="' . h($href($next)) . '" data-lang="' . h($next) . '">' . th('admin.picker.next') . ' ' . (is_rtl() ? '&larr;' : '&rarr;') . '</a>'
+        : '<span class="hint">' . th('admin.picker.all_done') . '</span>';
+    return $html . '</div>';
+}
+
 // A dietary chart label: the requirement in the admin's language, or "Other".
 function segment_label(string $label): string
 {
@@ -1378,14 +1420,10 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
   <section class="card">
     <h2><?= th('admin.tab.email') ?></h2>
     <?php if (count(site_languages()) > 1): ?>
-      <nav class="lang-tabs" aria-label="<?= th('admin.lang_tabs_label') ?>">
-        <?php foreach (site_languages() as $code): $isMain = $code === site_language();
-            $done = !$isMain && (trim(setting('mail_subject.' . $code)) !== '' || trim(setting('mail_body.' . $code)) !== '' || trim(setting('tagline.' . $code)) !== ''); ?>
-          <a href="/admin.php?tab=email<?= $isMain ? '' : '&amp;lang=' . h($code) ?>" lang="<?= h($code) ?>"
-             <?= $code === $mailLang ? 'aria-current="page"' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?><?php
-             if ($isMain): ?> <span class="hint"><?= th('admin.main') ?></span><?php elseif ($done): ?> <span class="tick" aria-label="<?= th('admin.translated') ?>">✓</span><?php endif; ?></a>
-        <?php endforeach; ?>
-      </nav>
+      <?= lang_picker(site_languages(), $mailLang,
+          array_values(array_filter(site_languages(), fn($code) => trim(setting('mail_subject.' . $code)) !== ''
+              || trim(setting('mail_body.' . $code)) !== '' || trim(setting('tagline.' . $code)) !== '')),
+          fn($code) => '/admin.php?tab=email' . ($code === site_language() ? '' : '&lang=' . $code)) ?>
     <?php endif; ?>
     <form method="post" class="email-form">
       <?= csrf_field() ?>
@@ -1468,8 +1506,10 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
         <details class="translations">
           <summary><?= th('admin.upd.translations', ['done' => $written, 'total' => count($otherLanguages)]) ?></summary>
           <p class="hint"><?= th('admin.upd.translations_hint') ?></p>
+          <?= lang_picker($otherLanguages, $otherLanguages[0],
+              array_keys(array_filter($draft['translations'], fn($tr) => $tr['body'] !== '')), fn($code) => '#tr-' . $code, true) ?>
           <?php foreach ($otherLanguages as $code): $tr = $draft['translations'][$code] ?? ['subject' => '', 'body' => '']; ?>
-            <details class="translation">
+            <details class="translation" id="tr-<?= h($code) ?>" data-lang="<?= h($code) ?>">
               <summary><bdi lang="<?= h($code) ?>"><?= h(LANGUAGE_NAMES[$code]) ?></bdi><?= $tr['body'] !== '' ? ' <span class="tick" aria-label="' . th('admin.written') . '">✓</span>' : '' ?></summary>
               <div lang="<?= h($code) ?>" dir="<?= in_array($code, RTL_LANGUAGES, true) ? 'rtl' : 'ltr' ?>">
                 <label><span <?= $adminDir ?>><?= th('admin.field.subject') ?></span><input type="text" name="tr[<?= h($code) ?>][subject]" value="<?= h($tr['subject']) ?>"></label>
@@ -1620,13 +1660,8 @@ $myUsername = $me['id'] ? (string)(find_user((int)$me['id'])['username'] ?? '') 
   <section class="card" id="editor">
     <h2><?= th($editing['id'] ? 'admin.content.edit' : 'admin.content.new') ?></h2>
     <?php if ($editing['id'] && count(site_languages()) > 1): $done = section_languages((int)$editing['id']); ?>
-      <nav class="lang-tabs" aria-label="<?= th('admin.lang_tabs_label') ?>">
-        <?php foreach (site_languages() as $code): $isMain = $code === site_language(); ?>
-          <a href="/admin.php?tab=content&amp;section=<?= (int)$editing['id'] ?><?= $isMain ? '' : '&amp;lang=' . h($code) ?>#editor"
-             lang="<?= h($code) ?>" <?= $code === $editLang ? 'aria-current="page"' : '' ?>><?= h(LANGUAGE_NAMES[$code]) ?><?php
-             if ($isMain): ?> <span class="hint"><?= th('admin.main') ?></span><?php elseif (in_array($code, $done, true)): ?> <span class="tick" aria-label="<?= th('admin.translated') ?>">✓</span><?php endif; ?></a>
-        <?php endforeach; ?>
-      </nav>
+      <?= lang_picker(site_languages(), $editLang, $done,
+          fn($code) => '/admin.php?tab=content&section=' . (int)$editing['id'] . ($code === site_language() ? '' : '&lang=' . $code) . '#editor') ?>
       <?php if ($editLang !== site_language()): ?>
         <p class="hint"><?= th('admin.content.translation_hint', ['language' => LANGUAGE_NAMES[$editLang]]) ?></p>
         <details class="main-version"><summary><?= th('admin.content.show_main') ?></summary>

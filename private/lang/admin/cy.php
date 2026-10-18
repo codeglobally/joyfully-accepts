@@ -28,7 +28,6 @@ return [
     'admin.main' => '(prif)',
     'admin.translated' => 'wedi’i chyfieithu',
     'admin.written' => 'wedi’i hysgrifennu',
-    'admin.lang_tabs_label' => 'Iaith y fersiwn hon',
     'admin.saved_version' => 'Mae’r fersiwn {language} wedi’i chadw.',
     'admin.saved_changes' => 'Wedi cadw’r newidiadau i {name}.',
     'admin.test_sent' => 'Prawf wedi’i anfon at {email}.',
@@ -509,4 +508,12 @@ return [
     'admin.stpl.blank.label' => 'Adran wag',
     'admin.stpl.day.title' => 'Y diwrnod',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[Agor mewn Mapiau]({map})\n\nYchwanegwch amseroedd y diwrnod yma, e.e. y seremoni am 3pm, ac yna diodydd, bwyd a dawnsio.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'Golygu',
+    'admin.picker.choose' => 'Dewiswch yr iaith i’w golygu',
+    'admin.picker.progress' => '{done} o {total} wedi’u cyfieithu',
+    'admin.picker.next' => 'Yr un nesaf heb ei chyfieithu',
+    'admin.picker.all_done' => 'Y cyfan wedi’i gyfieithu',
+    'admin.picker.todo' => 'ddim eto',
 ];

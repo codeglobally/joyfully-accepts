@@ -963,8 +963,9 @@ html[lang^="zh"] .eyebrow { letter-spacing: 0.1em; }
 html[lang="ar"] em, html[lang="ar"] i, html[lang^="zh"] em, html[lang^="zh"] i { font-style: normal; font-weight: 600; }
 html[lang="ar"] .not-found .quip, html[lang^="zh"] .not-found .quip { font-style: normal; }
 
-/* The language menu at the bottom of guest pages. */
+/* The language menu: at the bottom of guest pages, and in the top corner. */
 .language-menu { margin: 10px auto 0; text-align: center; font-size: 0.8rem; }
+.language-menu.top { position: relative; margin: 0; font-size: 0.85rem; }
 .language-menu summary {
   display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px;
   color: var(--muted); cursor: pointer; list-style: none;
@@ -972,7 +973,27 @@ html[lang="ar"] .not-found .quip, html[lang^="zh"] .not-found .quip { font-style
 .language-menu summary::-webkit-details-marker { display: none; }
 .language-menu summary:hover, .language-menu[open] summary { color: var(--accent); }
 .language-menu summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.language-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 8px 0 0; }
+.language-list { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); justify-content: center; gap: 6px; margin: 8px 0 0; }
+.language-list .tick { color: inherit; }
+/* In the corner it opens as a small panel over the page. */
+.language-menu.top .language-list {
+  position: absolute; z-index: 20; inset-block-start: calc(100% + 6px); inset-inline-end: 0;
+  grid-template-columns: repeat(2, max-content); padding: 10px; margin: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(40, 20, 10, 0.18);
+}
+.entry.lightbox { position: relative; }
+.entry .corner { position: absolute; inset-block-start: 12px; inset-inline-end: 12px; }
+@media (max-width: 480px) {
+  .language-list { grid-template-columns: repeat(2, minmax(0, max-content)); }
+  .language-menu.top summary span { display: none; }   /* just the globe; its label still names the language */
+}
+/* "View this page in …": a one-line suggestion at the top of the page. */
+.language-hint {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 16px;
+  margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--bg); font-size: 0.9rem;
+}
+.language-hint .link { font-size: inherit; }
+.language-hint .quiet { color: var(--muted); }
 .language-list button {
   padding: 6px 12px; font-size: 0.9rem; font-weight: 400; color: var(--ink);
   background: var(--card); border: 1px solid var(--line); border-radius: 999px;
@@ -981,13 +1002,33 @@ html[lang="ar"] .not-found .quip, html[lang^="zh"] .not-found .quip { font-style
 .language-list button:hover { filter: none; border-color: var(--accent); }
 
 /* Admin: choosing which language's version of something to edit. */
-.lang-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
-.lang-tabs a {
-  padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 0.88rem;
-  color: var(--ink); text-decoration: none; background: var(--card);
+.lang-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 4px 0 14px; font-size: 0.9rem; }
+.lang-menu { position: relative; }
+.lang-menu summary {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; list-style: none;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card); white-space: nowrap;
 }
-.lang-tabs a[aria-current="page"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.lang-tabs .tick { color: #2e7d32; }
+.lang-menu summary::-webkit-details-marker { display: none; }
+.lang-menu summary::after { content: "▾"; color: var(--muted); font-size: 0.8em; }
+.lang-menu[open] summary, .lang-menu summary:hover { border-color: var(--accent); }
+.lang-menu summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lang-menu-list {
+  position: absolute; z-index: 30; inset-block-start: calc(100% + 6px); inset-inline-start: 0; min-width: 260px;
+  list-style: none; margin: 0; padding: 6px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+.lang-menu-list a {
+  display: flex; justify-content: space-between; gap: 16px; padding: 8px 10px; border-radius: 8px;
+  color: var(--ink); text-decoration: none;
+}
+.lang-menu-list a:hover, .lang-menu-list a:focus-visible { background: var(--bg); }
+.lang-menu-list a[aria-current="page"] { background: var(--bg); font-weight: 600; }
+.lang-picker .hint { margin: 0; }   /* the usual hint spacing would push it out of line */
+.lang-picker .status { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
+.lang-picker .status.done { color: #2e7d32; }
+/* Updates tab with JavaScript: one translation at a time, chosen with the picker. */
+.translations[data-switching] .translation > summary { display: none; }
+.translations[data-switching] .translation { border-bottom: 0; padding-top: 0; }
 .main-version { margin: 0 0 14px; }
 .main-version summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
 .main-version .card { margin-top: 8px; }

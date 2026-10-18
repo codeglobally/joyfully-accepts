@@ -25,7 +25,6 @@ return [
     'admin.main' => '(principal)',
     'admin.translated' => 'traducido',
     'admin.written' => 'escrito',
-    'admin.lang_tabs_label' => 'Idioma de esta versión',
     'admin.saved_version' => 'Se ha guardado la versión en {language}.',
     'admin.saved_changes' => 'Se han guardado los cambios de {name}.',
     'admin.test_sent' => 'Prueba enviada a {email}.',
@@ -508,4 +507,12 @@ return [
     'admin.stpl.blank.label' => 'Sección en blanco',
     'admin.stpl.day.title' => 'El día',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[Abrir en Mapas]({map})\n\nAñade aquí el horario del día, p. ej., ceremonia a las 15:00, y después bebidas, cena y baile.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'Editando',
+    'admin.picker.choose' => 'Elige el idioma que quieres editar',
+    'admin.picker.progress' => '{done} de {total} traducidos',
+    'admin.picker.next' => 'Siguiente sin traducir',
+    'admin.picker.all_done' => 'Todo traducido',
+    'admin.picker.todo' => 'aún no',
 ];

@@ -170,4 +170,8 @@ return [
     'date.day_month_year' => '{day} {month} {year}',
     'date.with_time' => '{date}, {time}',
     'date.with_weekday' => '{weekday} {date}',
+
+    // Suggesting the visitor's own language (top of guest pages).
+    'language.suggest' => 'Gweld y dudalen hon yn {language}',
+    'language.keep' => 'Dim diolch',
 ];

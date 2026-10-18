@@ -32,7 +32,6 @@ return [
     'admin.main' => '(الرئيسية)',
     'admin.translated' => 'مترجمة',
     'admin.written' => 'مكتوبة',
-    'admin.lang_tabs_label' => 'لغة هذه النسخة',
     'admin.saved_version' => 'تم حفظ النسخة {language}.',
     'admin.saved_changes' => 'تم حفظ التغييرات على {name}.',
     'admin.test_sent' => 'أُرسلت الرسالة التجريبية إلى {email}.',
@@ -513,4 +512,12 @@ return [
     'admin.stpl.blank.label' => 'قسم فارغ',
     'admin.stpl.day.title' => 'اليوم الكبير',
     'admin.stpl.day.body' => "**{date}**\n\n{place}\n[فتح في الخرائط]({map})\n\nأضيفوا هنا مواعيد اليوم، مثلًا: عقد القران الساعة 3 عصرًا، ثم المشروبات والعشاء والرقص.",
+
+    // The language picker on translatable things.
+    'admin.picker.editing' => 'التعديل',
+    'admin.picker.choose' => 'اختاروا اللغة التي تريدون تعديلها',
+    'admin.picker.progress' => 'المترجم: {done} من {total}',
+    'admin.picker.next' => 'التالية غير المترجمة',
+    'admin.picker.all_done' => 'كل شيء مترجم',
+    'admin.picker.todo' => 'ليس بعد',
 ];
