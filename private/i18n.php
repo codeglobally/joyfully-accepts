@@ -19,6 +19,7 @@ const LANGUAGE_NAMES = [
     'ar' => 'العربية',
     'zh-Hans' => '简体中文',
     'zh-Hant' => '繁體中文',
+    'mi' => 'Te Reo Māori',
 ];
 const RTL_LANGUAGES = ['ar'];
 
@@ -130,7 +131,8 @@ function language_from_text(string $text): ?string
     $text = trim($text);
     $folded = function_exists('mb_strtolower') ? mb_strtolower($text) : strtolower($text);
     $english = ['english' => 'en', 'spanish' => 'es', 'german' => 'de', 'french' => 'fr', 'arabic' => 'ar',
-        'chinese' => 'zh-Hans', 'simplified chinese' => 'zh-Hans', 'traditional chinese' => 'zh-Hant'];
+        'chinese' => 'zh-Hans', 'simplified chinese' => 'zh-Hans', 'traditional chinese' => 'zh-Hant',
+        'maori' => 'mi', 'māori' => 'mi', 'te reo' => 'mi', 'reo māori' => 'mi'];
     foreach (LANGUAGE_NAMES as $code => $name) {
         if ($folded === (function_exists('mb_strtolower') ? mb_strtolower($name) : strtolower($name))) {
             return $code;

@@ -1,5 +1,5 @@
 name: Translation correction
-description: Something in Spanish, German, French, Arabic or Chinese reads wrongly, awkwardly or unkindly.
+description: Something in Spanish, German, French, Arabic, Chinese or Māori reads wrongly, awkwardly or unkindly.
 title: "Translation: "
 labels: [translation]
 body:
@@ -21,6 +21,7 @@ body:
         - العربية (Arabic)
         - 简体中文 (Simplified Chinese)
         - 繁體中文 (Traditional Chinese)
+        - Te Reo Māori
         - English
     validations:
       required: true

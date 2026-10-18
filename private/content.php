@@ -27,6 +27,12 @@ function content_db(): PDO
             PRIMARY KEY (section_id, language)
         )');
         seed_sections($pdo);
+        // Once, on new and existing sites: draft translations for the
+        // starter sections, wherever their text hasn't been changed.
+        if (!$pdo->query("SELECT value FROM settings WHERE key = 'sections_translated'")->fetchColumn()) {
+            translate_starter_sections($pdo);
+            $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_translated', '1')");
+        }
         $ready = true;
     }
     return $pdo;
@@ -39,14 +45,55 @@ function seed_sections(PDO $pdo): void
     if ($done) {
         return;
     }
-    $map = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(WEDDING_PLACE);
     $insert = $pdo->prepare('INSERT INTO sections (title, body, visible, position) VALUES (?, ?, ?, ?)');
-    [$dayTitle, $dayBody] = in_language(site_language(), fn() => [t('admin.stpl.day.title'),
-        t('admin.stpl.day.body', ['date' => WEDDING_DATE, 'place' => WEDDING_PLACE, 'map' => $map])]);
-    $insert->execute([$dayTitle, $dayBody, 1, 1]);
-    $hotels = section_templates()['hotels'];
-    $insert->execute([$hotels['title'], $hotels['body'], 0, 2]);
+    $starters = starter_sections();
+    $insert->execute([$starters['day'][site_language()][0], $starters['day'][site_language()][1], 1, 1]);
+    $insert->execute([$starters['hotels'][site_language()][0], $starters['hotels'][site_language()][1], 0, 2]);
     $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_seeded', '1')");
+}
+
+// The starter sections ("The day" and the Add a section templates) in every
+// language: [key => [code => [title, body]]].
+function starter_sections(): array
+{
+    $map = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(WEDDING_PLACE);
+    $out = [];
+    foreach (site_languages() as $code) {
+        in_language($code, function () use (&$out, $code, $map) {
+            $out['day'][$code] = [t('admin.stpl.day.title'),
+                t('admin.stpl.day.body', ['date' => wedding_date_text(), 'place' => WEDDING_PLACE, 'map' => $map])];
+            foreach (['hotels', 'things', 'travel', 'gifts', 'faq'] as $key) {
+                $out[$key][$code] = [t("admin.stpl.$key.title"), t("admin.stpl.$key.body")];
+            }
+        });
+    }
+    return $out;
+}
+
+// Adds draft translations to sections that are still exactly a starter
+// section in the site's language and have none yet ($id: just that one).
+// Sections the couple has reworded are left alone.
+function translate_starter_sections(PDO $pdo, ?int $id = null): int
+{
+    $starters = starter_sections();
+    $insert = $pdo->prepare('INSERT OR IGNORE INTO section_translations (section_id, language, title, body, updated_by) VALUES (?, ?, ?, ?, ?)');
+    $sql = 'SELECT * FROM sections WHERE id NOT IN (SELECT section_id FROM section_translations)' . ($id ? ' AND id = ' . (int)$id : '');
+    $added = 0;
+    foreach ($pdo->query($sql)->fetchAll() as $s) {
+        foreach ($starters as $versions) {
+            [$title, $body] = $versions[site_language()];
+            if ($s['title'] === $title && str_replace("\r\n", "\n", trim($s['body'])) === trim($body)) {
+                foreach ($versions as $code => [$trTitle, $trBody]) {
+                    if ($code !== site_language()) {
+                        $insert->execute([$s['id'], $code, $trTitle, $trBody, 'Draft translation']);
+                        $added++;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return $added;
 }
 
 function all_sections(bool $visibleOnly = false): array

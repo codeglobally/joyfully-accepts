@@ -677,6 +677,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $next = (int)content_db()->query('SELECT COALESCE(MAX(position), 0) + 1 FROM sections')->fetchColumn();
             content_db()->prepare('INSERT INTO sections (title, body, visible, position, updated_by) VALUES (?, ?, ?, ?, ?)')
                 ->execute([$title, $body, $visible, $next, $me['name']]);
+            // Started from a template and not reworded: add its draft translations.
+            translate_starter_sections(content_db(), (int)content_db()->lastInsertId());
             $message = t($visible ? 'admin.content.added_shown' : 'admin.content.added_hidden', ['title' => $title]);
         }
         if ($action === 'section_save' && $title !== '') {

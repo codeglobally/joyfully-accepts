@@ -187,7 +187,7 @@ function party_members(string $name): array
     $lastWords = preg_split('/\s+/', end($parts));
     $surname = count($lastWords) > 1 ? end($lastWords) : '';
     foreach ($parts as $i => $part) {
-        if (preg_match('/^(guest|plus one|one|1|invitad[oa]|acompañante|gast|begleitung|invité|invitée|ضيف|مرافق|同伴|嘉宾|嘉賓)$/iu', $part)) {
+        if (preg_match('/^(guest|plus one|one|1|invitad[oa]|acompañante|gast|begleitung|invité|invitée|manuhiri|ضيف|مرافق|同伴|嘉宾|嘉賓)$/iu', $part)) {
             $parts[$i] = 'Guest';
         } elseif ($surname !== '' && $i < count($parts) - 1
             && preg_match('/^(' . NAME_TITLES . ')\.?$/iu', $part)) {
@@ -291,14 +291,15 @@ function dietary_summary(array $guest): string
 
 // What goes between people's names, in each language: "&", "+", commas
 // (also the Chinese 、 and ， and the Arabic ،), "and", "plus", "y", "und",
-// "et" and a separate "و". 和, 与, 與 and 及 only count between names of two
+// "et", "me" (te reo Māori) and a separate "و". 和, 与, 與 and 及 only count between names of two
 // or more characters, so a name like 王和平 stays whole.
-const NAME_SEPARATORS = '/(\s*(?:&|＆|\+|＋|,|，|、|،|\b(?:and|plus|y|und|et)\b|(?<=\s)و(?=\s)|(?<=\p{Han}{2})[和与與及](?=\p{Han}{2}))\s*)/iu';
+const NAME_SEPARATORS = '/(\s*(?:&|＆|\+|＋|,|，|、|،|\b(?:and|plus|y|und|et|me)\b|(?<=\s)و(?=\s)|(?<=\p{Han}{2})[和与與及](?=\p{Han}{2}))\s*)/iu';
 // Words before a name that aren't first names. A title keeps the surname
 // ("Mr Smith"); a relation is followed by a first name ("Uncle Bob").
 const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col|sr|sra|srta|herr|frau|mme|mlle';
 const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby'
     . '|tío|tía|tio|tia|abuelo|abuela|primo|prima|onkel|tante|oma|opa|cousine|oncle|tata|mamie|papi|papy'
+    . '|koro|kui|kuia|karani|whaea|matua|kōkā|pāpā'
     . '|عم|عمة|خال|خالة|جد|جدة|أبو|أم';
 
 // One person's name split into [the rest, surname, whether a first-names
@@ -336,7 +337,7 @@ function person_surname(string $person): ?array
 // say how many people are coming.
 function is_family_name(string $name): bool
 {
-    return (bool)preg_match('/\b(family|household|kids|children|familia|familie|famille)\b|عائلة|أسرة|一家|全家|家庭|家人/iu', $name);
+    return (bool)preg_match('/\b(family|household|kids|children|familia|familie|famille)\b|whānau|whanau|عائلة|أسرة|一家|全家|家庭|家人/iu', $name);
 }
 
 // The name with surnames taken off: "Sarah, Tom and Lily Jones" ->

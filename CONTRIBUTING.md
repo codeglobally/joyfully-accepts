@@ -31,12 +31,12 @@ A big new feature may not fit even if it's a good idea, so for anything large, p
 
 ## Translations
 
-The site comes in English, Español, Deutsch, Français, العربية, 简体中文 and 繁體中文. Everything other than English began as a draft, so corrections from people who speak these languages are the most valuable help of all.
+The site comes in English, Español, Deutsch, Français, العربية, 简体中文, 繁體中文 and Te Reo Māori. Everything other than English began as a draft, so corrections from people who speak these languages are the most valuable help of all.
 
 - **What guests see** (pages and emails) is in `private/lang/xx.php`; **the admin area** is in `private/lang/admin/xx.php`. English (`en.php`) is the source for both.
 - Keep every key, and every `{placeholder}` exactly as it is: the site fills in `{name}`, `{count}` and the rest. Where a phrase shows `{name}`, `{link}` and `{code}` to the couple, those stay in English too.
-- Phrases with a `{count}` have plural forms: `one` and `other` in English, Spanish, German and French (French counts 0 as one); all six of `zero`, `one`, `two`, `few`, `many` and `other` in Arabic; just `other` in Chinese.
-- The tone: Spanish uses *tú*, German *Sie*, French *vous*, and Arabic the polite plural (أنتم), which works for one guest or several. Greetings in emails don't assume anyone's gender.
+- Phrases with a `{count}` have plural forms: `one` and `other` in English, Spanish, German, French and Māori (French counts 0 as one); all six of `zero`, `one`, `two`, `few`, `many` and `other` in Arabic; just `other` in Chinese.
+- The tone: Spanish uses *tú*, German *Sie*, French *vous*, Arabic the polite plural (أنتم), and Māori *koutou*, which work for one guest or several (the admin area uses *koe*). Greetings in emails don't assume anyone's gender.
 - The tests check that every language has every phrase, with the same placeholders and plural forms, so `php tests/run.php` tells you if something's missing.
 
 **Adding a language** means a new pair of files, adding it to `LANGUAGE_NAMES` in `private/i18n.php` (and `RTL_LANGUAGES` if it's written right to left), its plural rules in `plural_form()` (in PHP; the admin's scripts use the browser's own), and its words for "and" and "family" in `private/lib.php` so guest names split properly. Please start with a [language request](https://github.com/codeglobally/joyfully-accepts/issues/new?template=new_language.yml) so we can plan it together.

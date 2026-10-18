@@ -267,7 +267,22 @@ same('tagline: own wording where untranslated', 'Save the date', in_language('es
 check('an Arabic invitation is right-to-left, in Arabic', strpos($arHtml, '<html lang="ar" dir="rtl">') !== false
     && strpos($arHtml, 'عرض دعوتكم') !== false && strpos($arHtml, 'السبت 9 سبتمبر 2028') !== false && strpos($arText, 'أعزّاءنا Sara') === 0);
 foreach (['mail_subject', 'mail_body', 'tagline'] as $k) { save_setting($k, ''); foreach (array_keys(LANGUAGE_NAMES) as $c) { save_setting("$k.$c", ''); } }
-$secId = (int)content_db()->query('SELECT id FROM sections ORDER BY id LIMIT 1')->fetchColumn();
+$seeded = content_db()->query('SELECT id FROM sections ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+same('the sample sections come with a draft in every language', [array_values(array_diff(site_languages(), ['en'])), array_values(array_diff(site_languages(), ['en']))],
+    array_map(fn($id) => array_values(array_intersect(site_languages(), section_languages((int)$id))), array_slice($seeded, 0, 2)));
+$dayDe = section_translation((int)$seeded[0], 'de');
+check('...with the date in that language', strpos($dayDe['body'] ?? '', 'Samstag, 9. September 2028') !== false && ($dayDe['title'] ?? '') === 'Der Tag');
+$tplHotels = section_templates()['hotels'];
+content_db()->prepare('INSERT INTO sections (title, body) VALUES (?, ?)')->execute([$tplHotels['title'], $tplHotels['body']]);
+$fromTemplate = (int)content_db()->lastInsertId();
+content_db()->prepare('INSERT INTO sections (title, body) VALUES (?, ?)')->execute([$tplHotels['title'], $tplHotels['body'] . "\nOur own words."]);
+$reworded = (int)content_db()->lastInsertId();
+translate_starter_sections(content_db());
+same('a section from a template gets drafts', 'Où dormir', section_translation($fromTemplate, 'fr')['title'] ?? '');
+same('a reworded one is left alone', [], section_languages($reworded));
+content_db()->exec("DELETE FROM section_translations WHERE section_id IN ($fromTemplate, $reworded)");
+content_db()->exec("DELETE FROM sections WHERE id = $fromTemplate");
+$secId = $reworded;
 $mainSec = find_section($secId);
 save_section_translation($secId, 'es', 'El día', '', 'Test');
 $esSec = localise_sections([$mainSec], 'es')[0];
@@ -275,6 +290,7 @@ check('section translation: title translated, empty text uses the main text', $e
 check('section translation only for its language', localise_sections([$mainSec], 'de')[0]['title'] === $mainSec['title']);
 save_section_translation($secId, 'es', '', '', 'Test');
 same('clearing both removes the translation', [], section_languages($secId));
+content_db()->exec("DELETE FROM sections WHERE id = $secId");
 
 section('Update emails in each language');
 $starters = starter_templates();
@@ -382,7 +398,7 @@ $holders = function ($value): array {
     return $found;
 };
 $pluralForms = ['en' => ['one', 'other'], 'es' => ['one', 'other'], 'de' => ['one', 'other'], 'fr' => ['one', 'other'],
-    'ar' => ['zero', 'one', 'two', 'few', 'many', 'other'], 'zh-Hans' => ['other'], 'zh-Hant' => ['other']];
+    'ar' => ['zero', 'one', 'two', 'few', 'many', 'other'], 'zh-Hans' => ['other'], 'zh-Hant' => ['other'], 'mi' => ['one', 'other']];
 foreach (array_keys(LANGUAGE_NAMES) as $code) {
     $file = __DIR__ . '/../private/lang/' . $code . '.php';
     check("$code: phrase file exists", is_file($file));
@@ -446,6 +462,11 @@ same('Simplified Chinese CSV from older Excel', [['王小明', 'ming@example.com
 same('Traditional Chinese CSV from older Excel', [['陳美玲', 'mei@example.com']], parse_guest_csv($big5Csv));
 same('Western CSV from older Excel, accents and all', [['Renée Dupré', 'renee@example.com']],
     parse_guest_csv(mb_convert_encoding("Renée Dupré,renee@example.com\n", 'Windows-1252', 'UTF-8')));
+
+same('Māori "me" between people', ['Hēmi', 'Mere Tāmati'], party_members('Hēmi me Mere Tāmati'));
+same('a whānau invitation doesn\'t say how many', [], party_members('Te whānau Parata'));
+same('Māori date', 'Rāhoroi, 9 Mahuru 2028', in_language('mi', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Māori from a spreadsheet', ['mi', 'mi'], array_map('language_from_text', ['Māori', 'Te Reo Māori']));
 
 section('Admin in each language');
 $t9 = mktime(14, 5, 0, 9, 9, 2028);
