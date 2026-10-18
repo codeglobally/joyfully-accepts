@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        The site comes in English, Español, Deutsch, Français, العربية, 简体中文, 繁體中文 and Te Reo Māori. Adding a language means translating about 600 short phrases (the guest pages, emails and the admin area), plus checking dates and plural words work properly. A native speaker who can check the draft makes all the difference.
+        The site comes in English, Español, Deutsch, Français, العربية, 简体中文, 繁體中文, Te Reo Māori and Cymraeg. Adding a language means translating about 600 short phrases (the guest pages, emails and the admin area), plus checking dates and plural words work properly. A native speaker who can check the draft makes all the difference.
 
   - type: input
     id: language

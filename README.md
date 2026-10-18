@@ -33,7 +33,7 @@ It's plain PHP with a SQLite database: no frameworks, no build step, no external
 ## Features
 
 **For guests**
-- **Eight languages:** English, Español, Deutsch, Français, العربية (right to left), 简体中文, 繁體中文 and Te Reo Māori. Each guest gets their browser's language on their first visit, can switch in the footer, and keeps it, emails included. See [Languages](#languages).
+- **Nine languages:** English, Español, Deutsch, Français, العربية (right to left), 简体中文, 繁體中文, Te Reo Māori and Cymraeg. Each guest gets their browser's language on their first visit, can switch in the footer, and keeps it, emails included. See [Languages](#languages).
 - Code entry page with your photo and names. The date stays hidden until a guest enters their code (or show it with `DATE_ON_HOME_PAGE`). The code fills in automatically from the invitation link.
 - RSVP: *Joyfully accepts / Regretfully declines / Not sure yet*, choosing **who's coming** per person ("Sarah & Tom Jones" gets a tick box each), or a number for "The Smith Family".
 - Dietary requirements per person, picked from a list or typed in, shown as removable chips.
@@ -83,7 +83,7 @@ Look-and-feel settings can also go in a separate `private/site.php`, which `depl
 
 ## Languages
 
-The guest pages, emails and admin area come in English, Español, Deutsch, Français, العربية, 简体中文, 繁體中文 and Te Reo Māori.
+The guest pages, emails and admin area come in English, Español, Deutsch, Français, العربية, 简体中文, 繁體中文, Te Reo Māori and Cymraeg.
 
 - **Guests** get their browser's language on their first visit (falling back to the site's), can change it from the globe in the footer, and keep it after that. It's saved on their invitation, so update emails arrive in it too. The first invitation email goes in the site's language, unless you've set a guest's language yourself (when editing an invitation, or with a *Language* column in your CSV).
 - **Your own wording** can be translated as well: each guest-page section, the invitation email and tagline, and each update have a version per language. Anything you haven't translated falls back to your main version; built-in text you haven't changed is already translated.

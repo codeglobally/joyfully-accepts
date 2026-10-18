@@ -20,6 +20,7 @@ const LANGUAGE_NAMES = [
     'zh-Hans' => '简体中文',
     'zh-Hant' => '繁體中文',
     'mi' => 'Te Reo Māori',
+    'cy' => 'Cymraeg',
 ];
 const RTL_LANGUAGES = ['ar'];
 
@@ -132,7 +133,7 @@ function language_from_text(string $text): ?string
     $folded = function_exists('mb_strtolower') ? mb_strtolower($text) : strtolower($text);
     $english = ['english' => 'en', 'spanish' => 'es', 'german' => 'de', 'french' => 'fr', 'arabic' => 'ar',
         'chinese' => 'zh-Hans', 'simplified chinese' => 'zh-Hans', 'traditional chinese' => 'zh-Hant',
-        'maori' => 'mi', 'māori' => 'mi', 'te reo' => 'mi', 'reo māori' => 'mi'];
+        'maori' => 'mi', 'māori' => 'mi', 'te reo' => 'mi', 'reo māori' => 'mi', 'welsh' => 'cy'];
     foreach (LANGUAGE_NAMES as $code => $name) {
         if ($folded === (function_exists('mb_strtolower') ? mb_strtolower($name) : strtolower($name))) {
             return $code;
@@ -207,6 +208,8 @@ function plural_form(string $code, int $n): string
             return 'other';
         case 'fr':
             return $n === 0 || $n === 1 ? 'one' : 'other';
+        case 'cy':
+            return [0 => 'zero', 1 => 'one', 2 => 'two', 3 => 'few', 6 => 'many'][$n] ?? 'other';
         case 'zh-Hans':
         case 'zh-Hant':
             return 'other';

@@ -69,7 +69,7 @@ const MAX_FAILED_ATTEMPTS = 10;
 // anything you haven't translated shows in it. Codes: en, es, de, fr, ar,
 // zh-Hans (Simplified Chinese), zh-Hant (Traditional Chinese).
 // const SITE_LANGUAGE = 'en';
-// const LANGUAGES = ['en', 'es', 'de', 'fr', 'ar', 'zh-Hans', 'zh-Hant', 'mi'];   // ['en'] for English only
+// const LANGUAGES = ['en', 'es', 'de', 'fr', 'ar', 'zh-Hans', 'zh-Hant', 'mi', 'cy'];   // ['en'] for English only
 // const ARABIC_DIGITS = 'eastern';   // ٠-٩ instead of 0-9 in Arabic
 
 // Footer line "Made with ♥ in …" (hidden if empty), optionally a hidden link.

@@ -4,7 +4,7 @@ What changed in each version. The site uses [semantic versioning](https://semver
 
 ## 2.6.0
 
-- **Languages:** English, Español, Deutsch, Français, العربية (right-to-left), 简体中文, 繁體中文 and Te Reo Māori, for the guest pages, emails and the admin area. Everything other than English is a draft translation: corrections welcome, with new [translation](.github/ISSUE_TEMPLATE/translation.yml) and [new language](.github/ISSUE_TEMPLATE/new_language.yml) issue forms.
+- **Languages:** English, Español, Deutsch, Français, العربية (right-to-left), 简体中文, 繁體中文, Te Reo Māori and Cymraeg, for the guest pages, emails and the admin area. Everything other than English is a draft translation: corrections welcome, with new [translation](.github/ISSUE_TEMPLATE/translation.yml) and [new language](.github/ISSUE_TEMPLATE/new_language.yml) issue forms.
 - **Guests** get their browser's language on their first visit, can change it from the footer, and keep it: it's saved on their invitation and used for later emails. Dates, plurals and right-to-left layout follow the language.
 - **Draft content:** the sample sections and the *Add a section* templates come with a draft in every language, on existing sites too where you haven't reworded them.
 - **Your wording in each language:** guest-page sections, the invitation email and tagline, and update emails (including templates) each have a version per language, falling back to your main one. Built-in text you haven't changed comes translated, on existing sites too.
@@ -12,7 +12,7 @@ What changed in each version. The site uses [semantic versioning](https://semver
 - **Names** in other languages split into people properly ("y", "und", "et", "و", "和", "、"); Chinese names are left whole. CSV files saved by older Excel in Chinese encodings (GB18030, Big5) are read correctly.
 - Fix: the Insights tab no longer fails on a brand-new site before any update has been sent.
 - Fix: radio buttons keep their size next to long answers.
-- New settings: `SITE_LANGUAGE`, `LANGUAGES` and `ARABIC_DIGITS` (see `config.example.php`). Nothing to change to upgrade: without them the site's language is English, with all eight offered to guests.
+- New settings: `SITE_LANGUAGE`, `LANGUAGES` and `ARABIC_DIGITS` (see `config.example.php`). Nothing to change to upgrade: without them the site's language is English, with all nine offered to guests.
 
 ## 2.5.0
 

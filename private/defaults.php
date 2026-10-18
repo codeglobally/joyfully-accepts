@@ -28,7 +28,7 @@ $defaults = [
     // LANGUAGES are the ones guests and admins can choose. For English only,
     // set LANGUAGES to ['en'] and the language menu disappears.
     'SITE_LANGUAGE' => 'en',
-    'LANGUAGES' => ['en', 'es', 'de', 'fr', 'ar', 'zh-Hans', 'zh-Hant', 'mi'],
+    'LANGUAGES' => ['en', 'es', 'de', 'fr', 'ar', 'zh-Hans', 'zh-Hant', 'mi', 'cy'],
     // Arabic numbers: 'western' (0-9, understood everywhere) or 'eastern' (٠-٩).
     'ARABIC_DIGITS' => 'western',
     // Footer line "Made with ♥ in …". Leave empty to hide it. The optional

@@ -398,7 +398,7 @@ $holders = function ($value): array {
     return $found;
 };
 $pluralForms = ['en' => ['one', 'other'], 'es' => ['one', 'other'], 'de' => ['one', 'other'], 'fr' => ['one', 'other'],
-    'ar' => ['zero', 'one', 'two', 'few', 'many', 'other'], 'zh-Hans' => ['other'], 'zh-Hant' => ['other'], 'mi' => ['one', 'other']];
+    'ar' => ['zero', 'one', 'two', 'few', 'many', 'other'], 'zh-Hans' => ['other'], 'zh-Hant' => ['other'], 'mi' => ['one', 'other'], 'cy' => ['zero', 'one', 'two', 'few', 'many', 'other']];
 foreach (array_keys(LANGUAGE_NAMES) as $code) {
     $file = __DIR__ . '/../private/lang/' . $code . '.php';
     check("$code: phrase file exists", is_file($file));
@@ -465,6 +465,11 @@ same('Western CSV from older Excel, accents and all', [['Renée Dupré', 'renee@
 
 same('Māori "me" between people', ['Hēmi', 'Mere Tāmati'], party_members('Hēmi me Mere Tāmati'));
 same('a whānau invitation doesn\'t say how many', [], party_members('Te whānau Parata'));
+same('Welsh "a" and "ac" between people', ['Siân', 'Tomos', 'Lili Jones'], party_members('Siân, Tomos a Lili Jones'));
+same('...but a capital A is an initial', ['John A Smith', 'Mary Smith'], party_members('John A Smith & Mary Smith'));
+same('Welsh family invitation', [], party_members('Teulu Jones'));
+same('Welsh date', 'Dydd Sadwrn 9 Medi 2028', in_language('cy', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
+same('Welsh plurals', ['zero', 'one', 'two', 'few', 'other', 'many', 'other'], array_map(fn($n) => plural_form('cy', $n), [0, 1, 2, 3, 4, 6, 10]));
 same('Māori date', 'Rāhoroi, 9 Mahuru 2028', in_language('mi', fn() => format_date(new DateTimeImmutable('2028-09-09'))));
 same('Māori from a spreadsheet', ['mi', 'mi'], array_map('language_from_text', ['Māori', 'Te Reo Māori']));
 
