@@ -35,26 +35,32 @@ function notify_db(): PDO
             }
             $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('templates_seeded', '1')");
         }
-        // Sites from before translations: give the starter templates they
-        // haven't changed their translations.
-        if (!$pdo->query("SELECT value FROM settings WHERE key = 'templates_translated'")->fetchColumn()) {
+        // Sites from before translations, and again whenever a language is
+        // added: the starter templates they haven't changed get translations.
+        $languages = implode(',', site_languages());
+        if ($pdo->query("SELECT value FROM settings WHERE key = 'templates_translated'")->fetchColumn() !== $languages) {
             translate_starter_templates($pdo);
-            $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('templates_translated', '1')");
+            $pdo->prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('templates_translated', ?)")->execute([$languages]);
         }
         $ready = true;
     }
     return $pdo;
 }
 
-// Gives starter templates saved before translations existed, and not changed
-// since, the starters' translations.
+// Gives starter templates whose main text hasn't been changed the starters'
+// translations for any language they don't have yet. Translations already
+// there (including ones the couple wrote) are kept.
 function translate_starter_templates(PDO $pdo): void
 {
     $update = $pdo->prepare('UPDATE email_templates SET translations = ? WHERE id = ?');
-    foreach ($pdo->query('SELECT * FROM email_templates WHERE translations IS NULL')->fetchAll() as $row) {
+    foreach ($pdo->query('SELECT * FROM email_templates')->fetchAll() as $row) {
         foreach (starter_templates() as $t) {
             if ($row['subject'] === $t['subject'] && str_replace("\r\n", "\n", $row['body']) === $t['body']) {
-                $update->execute([json_encode($t['translations'], JSON_UNESCAPED_UNICODE), $row['id']]);
+                $have = template_translations($row);
+                $merged = $have + $t['translations'];
+                if (count($merged) > count($have)) {
+                    $update->execute([json_encode($merged, JSON_UNESCAPED_UNICODE), $row['id']]);
+                }
             }
         }
     }

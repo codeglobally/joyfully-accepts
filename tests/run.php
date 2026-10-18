@@ -280,6 +280,11 @@ $reworded = (int)content_db()->lastInsertId();
 translate_starter_sections(content_db());
 same('a section from a template gets drafts', 'Où dormir', section_translation($fromTemplate, 'fr')['title'] ?? '');
 same('a reworded one is left alone', [], section_languages($reworded));
+content_db()->prepare('DELETE FROM section_translations WHERE section_id = ? AND language = ?')->execute([$fromTemplate, 'cy']);
+save_section_translation($fromTemplate, 'fr', 'Mon titre', 'Mon texte', 'Test');
+translate_starter_sections(content_db());
+same('a language added later gets its draft too', 'Ble i aros', section_translation($fromTemplate, 'cy')['title'] ?? '');
+same('...without replacing translations already there', 'Mon titre', section_translation($fromTemplate, 'fr')['title'] ?? '');
 content_db()->exec("DELETE FROM section_translations WHERE section_id IN ($fromTemplate, $reworded)");
 content_db()->exec("DELETE FROM sections WHERE id = $fromTemplate");
 $secId = $reworded;
@@ -308,6 +313,13 @@ $changedId = (int)notify_db()->lastInsertId();
 translate_starter_templates(notify_db());
 check('upgrading: an unchanged starter gets its translations', isset(template_translations(find_template($unchangedId))['ar']));
 same('upgrading: a changed one is left alone', [], template_translations(find_template($changedId)));
+$partial = template_translations(find_template($unchangedId));
+unset($partial['cy']);
+$partial['fr'] = ['subject' => 'Mon sujet', 'body' => 'Mon texte'];
+notify_db()->prepare('UPDATE email_templates SET translations = ? WHERE id = ?')->execute([json_encode($partial), $unchangedId]);
+translate_starter_templates(notify_db());
+$after = template_translations(find_template($unchangedId));
+check('templates: a language added later is filled in, written ones kept', isset($after['cy']) && $after['fr']['subject'] === 'Mon sujet');
 notify_db()->exec("DELETE FROM email_templates WHERE id IN ($unchangedId, $changedId)");
 same('translations from a form are cleaned', ['es' => ['subject' => 'Hola a todos', 'body' => "Hola {name}\nAdiós"]], clean_translations([
     'es' => ['subject' => "Hola\na todos", 'body' => "Hola {name}\r\nAdiós "],

@@ -27,11 +27,13 @@ function content_db(): PDO
             PRIMARY KEY (section_id, language)
         )');
         seed_sections($pdo);
-        // Once, on new and existing sites: draft translations for the
-        // starter sections, wherever their text hasn't been changed.
-        if (!$pdo->query("SELECT value FROM settings WHERE key = 'sections_translated'")->fetchColumn()) {
+        // On new and existing sites, and again whenever a language is added:
+        // draft translations for the starter sections, wherever their text
+        // hasn't been changed.
+        $languages = implode(',', site_languages());
+        if ($pdo->query("SELECT value FROM settings WHERE key = 'sections_translated'")->fetchColumn() !== $languages) {
             translate_starter_sections($pdo);
-            $pdo->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_translated', '1')");
+            $pdo->prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('sections_translated', ?)")->execute([$languages]);
         }
         $ready = true;
     }
@@ -71,13 +73,14 @@ function starter_sections(): array
 }
 
 // Adds draft translations to sections that are still exactly a starter
-// section in the site's language and have none yet ($id: just that one).
-// Sections the couple has reworded are left alone.
+// section in the site's language, for any language they don't have yet
+// ($id: just that one). Sections the couple has reworded are left alone,
+// and existing translations are never replaced.
 function translate_starter_sections(PDO $pdo, ?int $id = null): int
 {
     $starters = starter_sections();
     $insert = $pdo->prepare('INSERT OR IGNORE INTO section_translations (section_id, language, title, body, updated_by) VALUES (?, ?, ?, ?, ?)');
-    $sql = 'SELECT * FROM sections WHERE id NOT IN (SELECT section_id FROM section_translations)' . ($id ? ' AND id = ' . (int)$id : '');
+    $sql = 'SELECT * FROM sections' . ($id ? ' WHERE id = ' . (int)$id : '');
     $added = 0;
     foreach ($pdo->query($sql)->fetchAll() as $s) {
         foreach ($starters as $versions) {
@@ -86,7 +89,7 @@ function translate_starter_sections(PDO $pdo, ?int $id = null): int
                 foreach ($versions as $code => [$trTitle, $trBody]) {
                     if ($code !== site_language()) {
                         $insert->execute([$s['id'], $code, $trTitle, $trBody, 'Draft translation']);
-                        $added++;
+                        $added += $insert->rowCount();
                     }
                 }
                 break;
