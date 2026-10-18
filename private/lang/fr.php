@@ -115,8 +115,8 @@ return [
     'notfound.back_home' => 'Retour à l’invitation',
 
     'date.short' => '{day} {month} {year}',
-    'home.tagline_default' => 'Vous êtes invités',
-    'email.invite_subject' => 'Vous êtes invités : {couple}, {date}',
+    'home.tagline_default' => 'Invitation',   // neutral, unlike invité(e)(s)
+    'email.invite_subject' => 'Invitation : {couple}, {date}',
     'email.invite_body' => "Bonjour {name},\n\nNous nous marions et nous serions ravis que vous soyez présents.\n\nDites-nous si vous pouvez venir sur le site de notre mariage :\n\n{link}\n\nVotre code d’invitation est {code}, au cas où vous auriez besoin de le saisir.\n\nNous ajouterons au fil des mois des détails sur la journée, l’hébergement et les transports.\n\nAvec toute notre affection,\n{couple}",
     'email.view_invitation' => 'Voir votre invitation',
     'email.link_help' => 'Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :',

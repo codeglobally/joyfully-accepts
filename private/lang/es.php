@@ -114,8 +114,8 @@ return [
     'notfound.back_home' => 'Volver a la invitación',
 
     'date.short' => '{day} de {month} de {year}',
-    'home.tagline_default' => 'Estás invitado',
-    'email.invite_subject' => 'Estás invitado: {couple}, {date}',
+    'home.tagline_default' => 'Te invitamos',   // "we invite you": works for anyone, unlike invitado/invitada
+    'email.invite_subject' => 'Te invitamos: {couple}, {date}',
     'email.invite_body' => "Hola, {name}:\n\nNos casamos y nos encantaría que estuvieras con nosotros.\n\nDinos si puedes venir en la web de nuestra boda:\n\n{link}\n\nTu código de invitación es {code}, por si necesitas escribirlo.\n\nIremos añadiendo detalles del día, alojamiento y transporte en la web en los próximos meses.\n\nCon cariño,\n{couple}",
     'email.view_invitation' => 'Ver tu invitación',
     'email.link_help' => 'Si el botón no funciona, copia este enlace en tu navegador:',

@@ -2,6 +2,10 @@
 
 What changed in each version. The site uses [semantic versioning](https://semver.org): MAJOR when site owners must do something to upgrade, MINOR for anything new, PATCH for fixes and small tweaks. Every change bumps the version.
 
+## 2.7.5
+
+- Spanish and French invitation subjects and taglines no longer assume a guest's gender: *Te invitamos* and *Invitation* (were *Estás invitado* and *Vous êtes invités*).
+
 ## 2.7.4
 
 - Plain-text error messages are escaped too, and error replies in JSON escape characters that mean something in HTML.
