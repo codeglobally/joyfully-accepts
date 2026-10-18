@@ -2,6 +2,10 @@
 
 What changed in each version. The site uses [semantic versioning](https://semver.org): MAJOR when site owners must do something to upgrade, MINOR for anything new, PATCH for fixes and small tweaks. Every change bumps the version.
 
+## 2.7.2
+
+- README: the fully localised guest and admin experience up front, with a table of the nine languages (and a flag each).
+
 ## 2.7.1
 
 - `deploy.sh`: reads the live site's current version from the 2.6+ footer again (it said "unknown").
