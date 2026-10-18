@@ -176,10 +176,10 @@ function place_html(): string
 // Returns [] for "The O'Brien Family" etc., where the number isn't known.
 function party_members(string $name): array
 {
-    if (preg_match('/\b(family|household|kids|children)\b/i', $name)) {
+    if (is_family_name($name)) {
         return [];
     }
-    $parts = preg_split('/\s*(?:&|\+|,|\band\b|\bplus\b)\s*/i', trim($name), -1, PREG_SPLIT_NO_EMPTY);
+    $parts = array_map('trim', preg_split(NAME_SEPARATORS, trim($name), -1, PREG_SPLIT_NO_EMPTY));
     if (!$parts) {
         return [trim($name)];
     }
@@ -187,10 +187,10 @@ function party_members(string $name): array
     $lastWords = preg_split('/\s+/', end($parts));
     $surname = count($lastWords) > 1 ? end($lastWords) : '';
     foreach ($parts as $i => $part) {
-        if (preg_match('/^(guest|plus one|one|1)$/i', $part)) {
+        if (preg_match('/^(guest|plus one|one|1|invitad[oa]|acompañante|gast|begleitung|invité|invitée|ضيف|مرافق|同伴|嘉宾|嘉賓)$/iu', $part)) {
             $parts[$i] = 'Guest';
         } elseif ($surname !== '' && $i < count($parts) - 1
-            && preg_match('/^(mr|mrs|ms|miss|mx|dr|prof|sir|lady|lord|rev)\.?$/i', $part)) {
+            && preg_match('/^(' . NAME_TITLES . ')\.?$/iu', $part)) {
             $parts[$i] = $part . ' ' . $surname;
         }
     }
@@ -289,11 +289,17 @@ function dietary_summary(array $guest): string
 // one choice for the whole site, which each invitation can override, or a
 // greeting typed in for that invitation.
 
-const NAME_SEPARATORS = '/(\s*(?:&|\+|,|\band\b|\bplus\b)\s*)/i';
+// What goes between people's names, in each language: "&", "+", commas
+// (also the Chinese 、 and ， and the Arabic ،), "and", "plus", "y", "und",
+// "et" and a separate "و". 和, 与, 與 and 及 only count between names of two
+// or more characters, so a name like 王和平 stays whole.
+const NAME_SEPARATORS = '/(\s*(?:&|＆|\+|＋|,|，|、|،|\b(?:and|plus|y|und|et)\b|(?<=\s)و(?=\s)|(?<=\p{Han}{2})[和与與及](?=\p{Han}{2}))\s*)/iu';
 // Words before a name that aren't first names. A title keeps the surname
 // ("Mr Smith"); a relation is followed by a first name ("Uncle Bob").
-const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col';
-const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby';
+const NAME_TITLES = 'mr|mrs|ms|miss|mx|dr|prof|sir|dame|lady|lord|rev|revd|capt|col|sr|sra|srta|herr|frau|mme|mlle';
+const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|grandad|granddad|nan|nana|nanna|nanny|cousin|great|little|baby'
+    . '|tío|tía|tio|tia|abuelo|abuela|primo|prima|onkel|tante|oma|opa|cousine|oncle|tata|mamie|papi|papy'
+    . '|عم|عمة|خال|خالة|جد|جدة|أبو|أم';
 
 // One person's name split into [the rest, surname, whether a first-names
 // greeting may drop it], or null when there's no surname to find:
@@ -303,10 +309,15 @@ const NAME_RELATIONS = 'uncle|auntie|aunty|aunt|gran|granny|grandma|grandpa|gran
 //   "Gran"       -> null
 function person_surname(string $person): ?array
 {
-    $words = preg_split('/\s+/', trim($person), -1, PREG_SPLIT_NO_EMPTY);
-    $titled = $words && preg_match('/^(' . NAME_TITLES . ')\.?$/i', $words[0]);
+    // Chinese names put the surname first with no space; rather than guess,
+    // they're left whole.
+    if (preg_match('/\p{Han}/u', $person)) {
+        return null;
+    }
+    $words = preg_split('/\s+/u', trim($person), -1, PREG_SPLIT_NO_EMPTY);
+    $titled = $words && preg_match('/^(' . NAME_TITLES . ')\.?$/iu', $words[0]);
     $first = $titled ? 1 : 0;
-    while ($first < count($words) - 1 && preg_match('/^(' . NAME_RELATIONS . ')$/i', $words[$first])) {
+    while ($first < count($words) - 1 && preg_match('/^(' . NAME_RELATIONS . ')$/iu', $words[$first])) {
         $first++;
     }
     if (count($words) - $first < ($titled ? 1 : 2)) {
@@ -315,16 +326,17 @@ function person_surname(string $person): ?array
     // The last word, with any particles before it ("van der Berg", "de la Cruz", "Ó Briain").
     $start = count($words) - 1;
     while ($start - 1 > $first
-        && preg_match('/^(van|von|de|der|den|da|di|du|la|le|del|della|dos|das|st\.?|ter|ten|ó|o|ní|nic|mac|mc|ap|bin|bint|ibn|al|el)$/iu', $words[$start - 1])) {
+        && preg_match('/^(van|von|de|der|den|da|di|du|la|le|del|della|dos|das|st\.?|ter|ten|ó|o|ní|nic|mac|mc|ap|bin|bint|ibn|al|el|بن|بنت|ابن|عبد|أبو|آل)$/iu', $words[$start - 1])) {
         $start--;
     }
     return [implode(' ', array_slice($words, 0, $start)), implode(' ', array_slice($words, $start)), !$titled];
 }
 
-// "The Smith Family" and similar are left exactly as written.
+// "The Smith Family" and similar are left exactly as written, and don't
+// say how many people are coming.
 function is_family_name(string $name): bool
 {
-    return (bool)preg_match('/\b(family|household|kids|children)\b/i', $name);
+    return (bool)preg_match('/\b(family|household|kids|children|familia|familie|famille)\b|عائلة|أسرة|一家|全家|家庭|家人/iu', $name);
 }
 
 // The name with surnames taken off: "Sarah, Tom and Lily Jones" ->
@@ -492,11 +504,41 @@ function split_guest_line(string $line): array
 // numbers) is ignored. Without headings, the first column is the name and any
 // other cell containing an @ is an address. Works with commas, semicolons or
 // tabs between columns, and with files saved from Excel or Numbers.
+// Which older encoding a non-UTF-8 spreadsheet is probably in. Chinese ones
+// come in pairs of high bytes. Big5 (Traditional) gives itself away with a
+// second byte below 0x7F, or a first byte of A4-AF: common characters in
+// Big5, but kana, Greek and box-drawing in GB18030 (Simplified), whose
+// characters start at B0. Anything else is taken as Windows-1252, older
+// Excel's Western European default.
+function legacy_encoding(string $bytes): string
+{
+    // Accented letters in Windows-1252 are single high bytes ("Renée"), so
+    // two high bytes side by side is what marks Chinese.
+    $high = preg_match_all('/[\x80-\xFF]/', $bytes);
+    $pairs = preg_match_all('/[\xA1-\xFE]{2}/', $bytes);
+    if (!$pairs || $pairs * 2 < $high * 0.5) {
+        return 'Windows-1252';
+    }
+    // Walk the characters in step (one byte for ASCII, two otherwise), so a
+    // second byte is never mistaken for a first.
+    for ($i = 0, $n = strlen($bytes); $i < $n - 1; $i++) {
+        $lead = ord($bytes[$i]);
+        if ($lead < 0x81) {
+            continue;
+        }
+        $trail = ord($bytes[++$i]);
+        if (($trail >= 0x40 && $trail <= 0x7E) || ($lead >= 0xA4 && $lead <= 0xAF && $trail >= 0xA1)) {
+            return 'BIG-5';
+        }
+    }
+    return mb_check_encoding($bytes, 'GB18030') ? 'GB18030' : 'BIG-5';
+}
+
 function parse_guest_csv(string $csv): array
 {
     $csv = (string)preg_replace('/^\xEF\xBB\xBF/', '', $csv);   // Excel's byte-order mark
     if (!preg_match('//u', $csv) && function_exists('mb_convert_encoding')) {
-        $csv = (string)mb_convert_encoding($csv, 'UTF-8', 'Windows-1252');   // older Excel
+        $csv = (string)mb_convert_encoding($csv, 'UTF-8', legacy_encoding($csv));   // older Excel
     }
     $first = strtok($csv, "\n") ?: '';
     $counts = [',' => substr_count($first, ','), ';' => substr_count($first, ';'), "\t" => substr_count($first, "\t")];

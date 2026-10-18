@@ -424,6 +424,29 @@ same('wedding date in another language is formatted', 'sábado, 9 de septiembre 
 same('dietary options shown translated', 'Vegetariano', in_language('es', fn() => diet_label('Vegetarian')));
 same('typed dietary needs shown as typed', 'Sin cebolla', in_language('es', fn() => diet_label('Sin cebolla')));
 
+section('Names in other languages');
+same('Spanish "y"', ['Ana', 'Luis García'], party_members('Ana y Luis García'));
+same('German "und"', ['Anna', 'Max Müller'], party_members('Anna und Max Müller'));
+same('French "et"', ['Léa', 'Hugo Martin'], party_members('Léa et Hugo Martin'));
+same('Arabic "و" and comma', ['سارة', 'توم', 'ليلى جونز'], party_members('سارة، توم و ليلى جونز'));
+same('Chinese 和 and 、', ['王小明', '李华', '陈叔叔'], party_members('王小明和李华、陈叔叔'));
+same('a 和 inside a name stays', ['王和平'], party_members('王和平'));
+same('full-width ampersand', ['张伟', '刘芳'], party_members('张伟＆刘芳'));
+same('Chinese names have no surname guessed', ['王小明和李华', '王小明和李华'], [first_names('王小明和李华'), name_html('王小明和李华')]);
+same('German titles keep the surname', ['Herr Müller', 'Frau Müller'], party_members('Herr & Frau Müller'));
+same('relations in other languages are first names', 'Tío Pepe', first_names('Tío Pepe'));
+same('Arabic surname after عبد', ['سارة', 'عبد الله', true], person_surname('سارة عبد الله'));
+same('family words in other languages', [[], [], [], []], [party_members('Familia García'), party_members('Familie Müller'), party_members('عائلة خان'), party_members('王家一家')]);
+same('plus-ones in other languages', ['Ana', 'Guest'], party_members('Ana + acompañante'));
+$gbCsv = mb_convert_encoding("王小明,ming@example.com\n", 'GB18030', 'UTF-8');
+$big5Csv = mb_convert_encoding("陳美玲,mei@example.com\n", 'BIG-5', 'UTF-8');
+$gbTricky = mb_convert_encoding("王小明李华Lee,ming@example.com\n", 'GB18030', 'UTF-8');   // 小 ends in A1, 华 in AA before "L"
+same('Simplified CSV not mistaken for Big5 mid-character', [['王小明李华Lee', 'ming@example.com']], parse_guest_csv($gbTricky));
+same('Simplified Chinese CSV from older Excel', [['王小明', 'ming@example.com']], parse_guest_csv($gbCsv));
+same('Traditional Chinese CSV from older Excel', [['陳美玲', 'mei@example.com']], parse_guest_csv($big5Csv));
+same('Western CSV from older Excel, accents and all', [['Renée Dupré', 'renee@example.com']],
+    parse_guest_csv(mb_convert_encoding("Renée Dupré,renee@example.com\n", 'Windows-1252', 'UTF-8')));
+
 section('Admin in each language');
 $t9 = mktime(14, 5, 0, 9, 9, 2028);
 same('admin date', '9 Sep', in_language('en', fn() => admin_date($t9)));
